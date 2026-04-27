@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>NaMão Delivery</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#172B4D',
+                        primaryDark: '#0B1526',
+                        accent: '#C9A84C',
+                        danger: '#ef4444',
+                        success: '#22c55e'
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="bg-gray-100 font-sans text-gray-800 h-screen flex justify-center items-center overflow-hidden">
+
+    <div class="bg-white w-full h-full max-w-md shadow-2xl relative overflow-hidden flex flex-col sm:h-[850px] sm:rounded-[2.5rem] sm:border-8 border-gray-900">
+
+        <!-- OVERLAY DE BANIMENTO -->
+        <div id="account-blocked-overlay" class="absolute inset-0 hidden flex flex-col items-center justify-center p-8 text-center text-white fade-in">
+            <i class="fa-solid fa-user-lock text-6xl text-danger mb-6"></i>
+            <h2 class="text-2xl font-black mb-2 uppercase tracking-tighter">Acesso Negado</h2>
+            <p id="block-message" class="text-gray-400 text-sm mb-8">Esta conta foi suspensa por violar as regras de segurança.</p>
+            <button onclick="openWhatsAppSupport()" class="bg-accent text-primary font-black py-4 px-8 rounded-2xl w-full uppercase tracking-widest">Falar com Suporte</button>
+        </div>
+
+        <!-- TELA DE AUTENTICAÇÃO -->
+        <div id="auth-screen" class="absolute inset-0 flex flex-col p-8 fade-in">
+            <div class="flex-1 flex flex-col justify-center items-center text-center">
+                <img src="icons/namao-icon.png" class="w-24 h-24 rounded-3xl mb-6 shadow-2xl border-2 border-accent/20" alt="NaMão logo">
+                <h1 class="text-4xl font-black text-white tracking-tighter">Na<span class="text-accent">Mão</span></h1>
+                <p class="text-gray-400 text-xs mt-2 uppercase tracking-[0.3em] mb-10">Delivery de Elite</p>
+
+                <div class="w-full" id="auth-form">
+                    <input type="email" id="auth-email" placeholder="E-mail" class="input-field">
+                    <input type="password" id="auth-password" placeholder="Senha" class="input-field">
+                    <button onclick="handleAuth('login')" class="w-full bg-accent text-primary font-black py-4 rounded-2xl shadow-xl mb-4 uppercase tracking-widest">Entrar</button>
+                    <button onclick="handleAuth('signup')" class="text-accent text-xs font-bold uppercase tracking-widest hover:opacity-80">Criar Nova Conta</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- HEADER -->
+        <header class="bg-primary text-white p-4 shadow-md z-20 flex justify-between items-center border-b border-white/5">
+            <div class="flex items-center gap-2">
+                <img src="icons/namao-icon.png" class="w-8 h-8 rounded-lg shadow-sm" alt="">
+                <h1 class="text-xl font-black tracking-tighter">Na<span class="text-accent">Mão</span></h1>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="openWhatsAppSupport()" class="bg-white/10 p-2.5 rounded-xl text-accent"><i class="fa-solid fa-headset"></i></button>
+                <button onclick="promptAdmin()" class="bg-primaryDark p-2.5 rounded-xl text-accent border border-white/10"><i class="fa-solid fa-shield-halved text-sm"></i></button>
+            </div>
+        </header>
+
+        <!-- TABS MODO -->
+        <div id="main-tabs" class="flex bg-white border-b shadow-sm z-10">
+            <button id="btn-cliente" class="flex-1 py-4 text-[10px] font-black uppercase text-primary border-b-4 border-primary transition-all" onclick="switchMainTab('cliente')">Solicitar Entrega</button>
+            <button id="btn-entregador" class="flex-1 py-4 text-[10px] font-black uppercase text-gray-400 border-b-4 border-transparent transition-all" onclick="switchMainTab('entregador')">Mural Entregador</button>
+        </div>
+
+        <div id="content-area" class="flex-1 relative overflow-hidden bg-white">
+
+            <!-- VIEW: CLIENTE -->
+            <main id="view-cliente" class="absolute inset-0 overflow-y-auto no-scrollbar pb-24 fade-in">
+                <div class="p-4">
+                    <div id="map-cliente" class="w-full h-44 bg-gray-200 rounded-[2rem] mb-4 border-2 border-gray-100 shadow-inner"></div>
+                    <form onsubmit="submitOrder(event)" class="space-y-4">
+                        <div class="grid grid-cols-2 gap-2">
+                            <label class="cursor-pointer">
+                                <input type="radio" name="vehicle" value="Moto" class="peer sr-only" checked onchange="calculatePrice()">
+                                <div class="p-3 rounded-2xl border-2 border-gray-100 peer-checked:border-primary peer-checked:bg-blue-50 text-center font-black text-[10px] uppercase text-primary transition">Moto</div>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="vehicle" value="Carro" class="peer sr-only" onchange="calculatePrice()">
+                                <div class="p-3 rounded-2xl border-2 border-gray-100 peer-checked:border-primary peer-checked:bg-blue-50 text-center font-black text-[10px] uppercase text-primary transition">Carro</div>
+                            </label>
+                        </div>
+                        <input type="text" id="origem" placeholder="📍 Local de Coleta" required class="input-field mb-0">
+                        <input type="text" id="destino" placeholder="🏁 Destino Final" required class="input-field mb-0">
+
+                        <div class="bg-primary p-6 rounded-[2rem] flex justify-between items-center text-white shadow-2xl relative overflow-hidden">
+                            <div class="absolute right-0 top-0 opacity-10 translate-x-4 -translate-y-4"><i class="fa-solid fa-wallet text-7xl"></i></div>
+                            <div>
+                                <p class="text-[9px] text-accent font-black uppercase tracking-widest mb-1">Preço Sugerido</p>
+                                <p id="calc-total" class="text-4xl font-black">R$ 0,00</p>
+                            </div>
+                            <div class="text-right">
+                                <p id="calc-km" class="text-[10px] font-black opacity-50 uppercase">0.0 KM</p>
+                            </div>
+                        </div>
+                        <button type="submit" class="w-full bg-accent hover:bg-yellow-600 text-primary font-black py-5 rounded-[1.5rem] shadow-xl transform transition active:scale-95 text-lg">PROSSEGUIR PARA PIX</button>
+                    </form>
+                </div>
+            </main>
+
+            <!-- VIEW: ENTREGADOR MURAL -->
+            <main id="view-entregador" class="absolute inset-0 flex flex-col bg-gray-100 hidden fade-in pb-20">
+                <div id="map-entregador" class="w-full flex-1"></div>
+                <div class="bg-white p-6 rounded-t-[2.5rem] -mt-8 z-20 shadow-[0_-20px_50px_rgba(0,0,0,0.15)] min-h-[350px]">
+                    <div class="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-6"></div>
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="font-black text-primary text-sm uppercase tracking-tighter">Entregas Disponíveis</h2>
+                        <div class="bg-gray-100 p-1 rounded-xl text-[8px] font-black flex">
+                            <button onclick="setDriverFilter('Todos')" id="f-Todos" class="px-3 py-1.5 bg-primary text-white rounded-lg shadow-sm">TUDO</button>
+                            <button onclick="setDriverFilter('Moto')" id="f-Moto" class="px-3 py-1.5 text-gray-400">MOTO</button>
+                        </div>
+                    </div>
+                    <div id="available-orders-list" class="space-y-4 overflow-y-auto no-scrollbar flex-1"></div>
+                </div>
+            </main>
+
+            <!-- VIEW: ATIVIDADE -->
+            <main id="view-atividade" class="absolute inset-0 overflow-y-auto hidden fade-in pb-24 p-5">
+                <h2 class="text-2xl font-black text-primary mb-4 tracking-tighter uppercase">Histórico</h2>
+                <div id="customer-orders-list" class="space-y-3"></div>
+            </main>
+
+            <!-- VIEW: ADMIN -->
+            <main id="view-admin" class="absolute inset-0 overflow-y-auto bg-gray-50 hidden fade-in z-50 pb-24">
+                <div class="bg-primary text-white p-6 shadow-xl rounded-b-[2.5rem] mb-4">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-black text-accent uppercase tracking-tighter">Gestão Master</h2>
+                        <button onclick="switchView('inicio')" class="text-gray-400 p-2"><i class="fa-solid fa-times"></i></button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-primaryDark p-5 rounded-2xl border border-white/5">
+                            <p class="text-[9px] font-black text-gray-400 uppercase mb-1">Volume Bruto</p>
+                            <p id="admin-gross" class="text-2xl font-black">R$ 0,00</p>
+                        </div>
+                        <div class="bg-primaryDark p-5 rounded-2xl border border-accent/20">
+                            <p class="text-[9px] font-black text-accent uppercase mb-1">Lucro (15%)</p>
+                            <p id="admin-net" class="text-2xl font-black text-accent">R$ 0,00</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="px-4 space-y-3" id="admin-orders-list"></div>
+            </main>
+
+            <!-- VIEW: PERFIL -->
+            <main id="view-perfil" class="absolute inset-0 overflow-y-auto bg-gray-50 hidden fade-in pb-24">
+                <div class="p-8 bg-primary text-white text-center rounded-b-[3rem] shadow-2xl">
+                    <div class="w-24 h-24 bg-white rounded-full mx-auto mb-4 flex items-center justify-center text-primary text-4xl border-4 border-accent shadow-xl"><i class="fa-solid fa-user"></i></div>
+                    <h2 class="font-black text-xl" id="profile-display-name">...</h2>
+                    <p id="profile-status" class="text-accent text-[10px] font-black uppercase mt-1">Status: Ativo</p>
+                </div>
+                <div class="p-6 space-y-4">
+                    <div id="driver-wallet-btn" class="hidden bg-primaryDark p-5 rounded-[1.5rem] border border-accent/20 text-white flex justify-between items-center shadow-2xl cursor-pointer" onclick="openDriverWallet()">
+                        <div>
+                            <p class="text-[9px] font-black text-accent uppercase mb-1">Meus Ganhos (85%)</p>
+                            <p class="text-3xl font-black">R$ <span id="profile-wallet-balance">0,00</span></p>
+                        </div>
+                        <i class="fa-solid fa-wallet text-3xl text-accent"></i>
+                    </div>
+                    <button onclick="switchView('driver-registration')" class="w-full bg-white border border-gray-200 py-4 rounded-xl font-bold text-primary text-sm uppercase tracking-widest shadow-sm">Virar Entregador</button>
+                    <button onclick="signOutUser()" class="w-full bg-white border border-gray-200 py-4 rounded-xl font-bold text-danger text-sm uppercase tracking-widest shadow-sm">Terminar Sessão</button>
+                </div>
+            </main>
+
+            <!-- VIEW: CADASTRO ENTREGADOR -->
+            <main id="view-driver-registration" class="absolute inset-0 overflow-y-auto bg-white hidden fade-in z-40 p-6">
+                <div class="text-center mb-8">
+                    <i class="fa-solid fa-id-card text-5xl text-accent"></i>
+                    <h2 class="text-2xl font-black text-primary mt-2 uppercase tracking-tighter">Seja um NaMão</h2>
+                </div>
+                <form onsubmit="registerDriver(event)" class="space-y-4">
+                    <input type="text" id="driver-name" required placeholder="Nome Completo" class="input-field">
+                    <input type="text" id="driver-cpf" required placeholder="CPF" class="input-field">
+                    <input type="text" id="driver-plate" required placeholder="Placa do Veículo" class="input-field text-center uppercase">
+                    <button type="submit" class="w-full bg-primary text-accent font-black py-4 rounded-2xl shadow-xl uppercase tracking-widest transform transition active:scale-95">Solicitar Aprovação</button>
+                </form>
+            </main>
+        </div>
+
+        <!-- MODAL COMPROVANTE (PROVA DE ENTREGA) -->
+        <div id="proof-delivery-modal" class="absolute inset-0 bg-primaryDark/98 z-[700] hidden flex flex-col p-6 overflow-y-auto">
+            <div class="bg-white rounded-[2.5rem] p-8 fade-in text-center shadow-2xl">
+                <h3 class="text-2xl font-black text-primary mb-2">Entrega Realizada</h3>
+                <p class="text-gray-400 text-[10px] mb-8 uppercase font-bold tracking-widest">Foto e Assinatura são obrigatórios para receber o saldo.</p>
+
+                <div class="space-y-6 text-left">
+                    <div>
+                        <label class="text-[10px] font-black text-primary uppercase block mb-2">1. Foto do Local da Entrega</label>
+                        <input type="file" id="delivery-photo" accept="image/*" capture="environment" class="w-full text-xs font-bold" onchange="validatePOD()">
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-black text-primary uppercase block mb-2">2. Assinatura do Cliente</label>
+                        <canvas id="signature-pad" width="300" height="150" class="w-full shadow-inner"></canvas>
+                        <button type="button" onclick="clearSignature()" class="text-[9px] text-danger font-black mt-2 uppercase tracking-widest"><i class="fa-solid fa-eraser"></i> Limpar Campo</button>
+                    </div>
+                </div>
+
+                <button id="btn-confirm-pod" disabled onclick="confirmDeliveryWithPOD()" class="w-full bg-success text-white font-black py-5 rounded-3xl shadow-xl mt-8 opacity-50 tracking-widest uppercase">FINALIZAR E RECEBER</button>
+                <button onclick="closePOD()" class="w-full py-4 text-gray-400 font-bold uppercase text-[10px] mt-2">Voltar ao Mapa</button>
+            </div>
+        </div>
+
+        <!-- MODAL PIX -->
+        <div id="checkout-modal" class="absolute inset-0 bg-primaryDark/95 z-[600] hidden flex flex-col justify-end p-6">
+            <div class="bg-white rounded-[3rem] p-8 slide-up text-center">
+                <i class="fa-brands fa-pix text-teal-500 text-7xl mb-4"></i>
+                <h2 class="text-2xl font-black text-primary tracking-tighter">Pagar Entrega</h2>
+                <div class="bg-gray-100 rounded-3xl p-6 my-6">
+                    <p class="text-xs text-gray-400 uppercase font-black mb-1">Total via PIX</p>
+                    <p id="checkout-price" class="text-4xl font-black text-primary">R$ 0,00</p>
+                </div>
+                <div class="bg-primary p-4 rounded-2xl mb-8 flex justify-between border border-accent/20 shadow-inner">
+                    <input type="text" id="checkout-pix-key" readonly value="SUA_CHAVE_PIX_AQUI" class="bg-transparent text-accent font-bold w-full text-center outline-none">
+                    <button onclick="copyPixKey()" class="text-white ml-2"><i class="fa-solid fa-copy"></i></button>
+                </div>
+                <p class="text-[10px] text-gray-400 font-bold uppercase mb-4">Após pagar, o admin confirma manualmente e libera a corrida.</p>
+                <button onclick="confirmPayment()" class="w-full bg-primary text-accent font-black py-5 rounded-3xl uppercase tracking-widest transform transition active:scale-95 shadow-xl">JÁ PAGUEI</button>
+                <button onclick="closeCheckout()" class="text-gray-400 font-bold uppercase text-[10px] mt-4">Cancelar e Voltar</button>
+            </div>
+        </div>
+
+        <nav id="bottom-nav" class="bg-white border-t border-gray-100 p-2 flex justify-around absolute bottom-0 w-full z-30 pb-8 pt-4">
+            <button onclick="switchView('inicio')" class="text-primary text-xl"><i class="fa-solid fa-house"></i></button>
+            <button onclick="switchView('atividade')" class="text-gray-400 text-xl relative"><i class="fa-solid fa-receipt"></i></button>
+            <button onclick="switchView('perfil')" class="text-gray-400 text-xl"><i class="fa-solid fa-user-circle"></i></button>
+        </nav>
+    </div>
+
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>

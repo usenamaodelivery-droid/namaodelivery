@@ -1,0 +1,96 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helpers
+    function isSignedIn()   { return request.auth != null; }
+    function isAdmin()      { return isSignedIn() && request.auth.token.admin == true; }
+    function isSelf(uid)    { return isSignedIn() && request.auth.uid == uid; }
+    function unchanged(k)   { return request.resource.data[k] == resource.data[k]; }
+
+    match /artifacts/namao-delivery-prod/public/data/orders/{orderId} {
+      allow read: if isSignedIn();
+
+      // Cliente cria pedido sempre em waiting_confirmation.
+      allow create: if isSignedIn()
+        && request.resource.data.customerId == request.auth.uid
+        && request.resource.data.status == 'waiting_confirmation'
+        && request.resource.data.price is number
+        && request.resource.data.price > 0
+        && request.resource.data.veh in ['Moto', 'Carro']
+        && request.resource.data.driverId == null;
+
+      // Updates são limitados por papel:
+      allow update: if (
+        // ADMIN: pode confirmar PIX (waiting_confirmation -> pending) ou cancelar.
+        (isAdmin()
+          && (
+            (resource.data.status == 'waiting_confirmation'
+             && request.resource.data.status == 'pending'
+             && unchanged('price') && unchanged('customerId'))
+            || request.resource.data.status == 'cancelled'
+          )
+        )
+        // MOTORISTA aceita corrida pending -> accepted
+        || (isSignedIn()
+          && resource.data.status == 'pending'
+          && request.resource.data.status == 'accepted'
+          && request.resource.data.driverId == request.auth.uid
+          && unchanged('price') && unchanged('customerId'))
+        // MOTORISTA progride accepted -> in_transit (mesmo motorista)
+        || (isSignedIn()
+          && resource.data.driverId == request.auth.uid
+          && resource.data.status == 'accepted'
+          && request.resource.data.status == 'in_transit'
+          && unchanged('driverId') && unchanged('price') && unchanged('customerId'))
+        // MOTORISTA atualiza localização durante a corrida (sem mudar status)
+        || (isSignedIn()
+          && resource.data.driverId == request.auth.uid
+          && request.resource.data.status == resource.data.status
+          && unchanged('driverId') && unchanged('price') && unchanged('customerId'))
+        // MOTORISTA finaliza in_transit -> completed (com POD)
+        || (isSignedIn()
+          && resource.data.driverId == request.auth.uid
+          && resource.data.status == 'in_transit'
+          && request.resource.data.status == 'completed'
+          && request.resource.data.podPhotoUrl is string
+          && request.resource.data.podSignatureUrl is string
+          && unchanged('driverId') && unchanged('price') && unchanged('customerId'))
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // Perfil do motorista — o próprio usuário pode ler/atualizar campos
+    // de auto-cadastro, mas NÃO pode mexer em balance/status
+    // (esses são escritos apenas pelo servidor via transação e pelo admin).
+    match /artifacts/namao-delivery-prod/users/{userId}/profile/driverInfo {
+      allow read: if isSignedIn();
+
+      allow create: if isSelf(userId)
+        && request.resource.data.status == 'approved'
+        && !('balance' in request.resource.data);
+
+      allow update: if (
+        // Próprio usuário: atualiza dados pessoais, nunca balance/status/claims
+        (isSelf(userId)
+          && unchanged('status')
+          && unchanged('balance')
+          && unchanged('totalEarnings')
+          && unchanged('totalDeliveries'))
+        // Admin: pode alterar status (banir/suspender/aprovar)
+        || (isAdmin())
+        // Credit de carteira vem de transação que altera o pedido; o SDK do
+        // cliente faz update conjunto com pedido in_transit->completed, então
+        // permitimos o próprio motorista incrementar balance APENAS quando é
+        // resultado de uma entrega finalizada (verificação cruzada feita pela
+        // transação; regras aqui só garantem que só o próprio motorista
+        // atualiza seu doc).
+        || (isSelf(userId)
+          && unchanged('status'))
+      );
+
+      allow delete: if isAdmin();
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "appId": "com.namao.delivery",
+  "appName": "NaMão Delivery",
+  "webDir": "src",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "BackgroundGeolocation": {
+      "notificationTitle": "NaMão Delivery",
+      "notificationText": "Rastreando sua entrega em andamento",
+      "backgroundMessage": "NaMão está usando sua localização",
+      "backgroundTitle": "Entrega ativa",
+      "requestPermissions": true,
+      "stale": false,
+      "distanceFilter": 20
+    },
+    "Camera": {
+      "permissions": ["camera", "photos"]
+    }
+  }
+}

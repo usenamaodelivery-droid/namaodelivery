@@ -1,0 +1,31 @@
+node_modules/
+dist/
+build/
+.DS_Store
+*.log
+
+# Android
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+android/app/release/
+android/app/debug/
+
+# Capacitor
+capacitor.config.local.json
+
+# Secrets — never commit
+*.jks
+*.keystore
+keystore.properties
+service-account*.json
+.env
+.env.*
+!.env.example
+
+# Firebase
+functions/node_modules/
+functions/lib/
+.firebase/
+firebase-debug.log

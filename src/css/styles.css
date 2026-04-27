@@ -1,0 +1,35 @@
+.fade-in { animation: fadeIn 0.3s ease-in-out; }
+@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+
+.slide-up { animation: slideUp 0.3s ease-out; }
+@keyframes slideUp { from { transform: translateY(40px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+#signature-pad {
+  border: 2px dashed #cbd5e1;
+  background: #f8fafc;
+  touch-action: none;
+  border-radius: 1rem;
+}
+
+#auth-screen { z-index: 500; background: #172B4D; }
+
+.input-field {
+  background: #f3f4f6;
+  border-radius: 14px;
+  padding: 16px;
+  width: 100%;
+  font-weight: 600;
+  outline: none;
+  margin-bottom: 12px;
+  border: 2px solid transparent;
+  transition: 0.2s;
+}
+.input-field:focus { border-color: #C9A84C; background: #fff; }
+
+#account-blocked-overlay {
+  backdrop-filter: blur(10px);
+  background: rgba(11, 21, 38, 0.98);
+  z-index: 1000;
+}
