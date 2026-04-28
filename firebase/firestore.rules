@@ -61,6 +61,16 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Logs de segurança — qualquer usuário autenticado pode CRIAR um log
+    // (ex: tentativa de cadastro reprovada pela IA). Apenas admin lê.
+    match /artifacts/namao-delivery-prod/public/data/securityLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn()
+        && request.resource.data.type is string
+        && request.resource.data.createdAt is number;
+      allow update, delete: if isAdmin();
+    }
+
     // Perfil do motorista — o próprio usuário pode ler/atualizar campos
     // de auto-cadastro, mas NÃO pode mexer em balance/status
     // (esses são escritos apenas pelo servidor via transação e pelo admin).

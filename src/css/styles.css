@@ -5,15 +5,11 @@
 @keyframes slideUp { from { transform: translateY(40px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
 
 .no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
 #signature-pad {
-  border: 2px dashed #cbd5e1;
-  background: #f8fafc;
   touch-action: none;
-  border-radius: 1rem;
 }
-
-#auth-screen { z-index: 500; background: #172B4D; }
 
 .input-field {
   background: #f3f4f6;
@@ -28,8 +24,37 @@
 }
 .input-field:focus { border-color: #C9A84C; background: #fff; }
 
-#account-blocked-overlay {
-  backdrop-filter: blur(10px);
-  background: rgba(11, 21, 38, 0.98);
-  z-index: 1000;
+/* Tabs Cliente / Entregador */
+.tab-active {
+  border-bottom: 3px solid #172B4D;
+  color: #172B4D;
+  font-weight: bold;
+  font-size: 13px;
+}
+.tab-inactive {
+  border-bottom: 3px solid transparent;
+  color: #9CA3AF;
+  font-weight: bold;
+  font-size: 13px;
+}
+
+/* Bottom nav */
+#bottom-nav button.active i,
+#bottom-nav button.active span {
+  color: #172B4D;
+}
+
+/* Radar pulse animation (tracking modal) */
+.radar-ping {
+  animation: radarPing 2.5s cubic-bezier(0,0,0.2,1) infinite;
+}
+@keyframes radarPing {
+  0% { transform: scale(0.5); opacity: 0.7; }
+  80%, 100% { transform: scale(2); opacity: 0; }
+}
+
+/* Splash fade */
+#splash-screen.faded {
+  opacity: 0;
+  pointer-events: none;
 }

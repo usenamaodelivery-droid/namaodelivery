@@ -24,9 +24,10 @@ import {
 const ordersCol = () => collection(db, "artifacts", APP_ID, "public", "data", "orders");
 
 /** Cliente cria pedido — entra em waiting_confirmation (aguardando admin liberar PIX). */
-export async function createOrder({ vehicle, price, origin, destination, customerId, originCoords, destCoords }) {
+export async function createOrder({ vehicle, price, origin, destination, customerId, originCoords, destCoords, itemType }) {
   return addDoc(ordersCol(), {
     veh: vehicle,
+    itemType: itemType || "Comida",
     price,
     origin,
     destination,

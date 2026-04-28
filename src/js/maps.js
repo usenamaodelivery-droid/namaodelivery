@@ -57,3 +57,13 @@ function drawRoute() {
 export function straightLineKm(a, b) {
   return L.latLng(a).distanceTo(L.latLng(b)) / 1000;
 }
+
+/** Tenta centralizar mapa do motorista na localização atual. */
+export function centerDriverMap() {
+  if (!mapDriver || !navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    (p) => mapDriver.setView([p.coords.latitude, p.coords.longitude], 15),
+    () => {},
+    { enableHighAccuracy: true, timeout: 8000 }
+  );
+}
