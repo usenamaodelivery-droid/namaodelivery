@@ -27,5 +27,9 @@ export const ROUTE_DETOUR_FACTOR = 1.35;
 export const LOCATION_UPDATE_MS = 15_000;
 
 // Contatos / chaves externas — sobrescritos em build de produção
-export const SUPPORT_WHATSAPP = "5511999999999";
-export const PIX_KEY = "SUA_CHAVE_PIX_AQUI";
+export const SUPPORT_WHATSAPP = "5527988528835";
+export const PIX_KEY = "namaooficiall@gmail.com";
+
+// UID do admin bootstrap — usado apenas para referência local. A autorização
+// real é feita via custom claim Firebase (ver functions/index.js).
+export const ADMIN_BOOTSTRAP_UID = "BPbgkyhqDmVMOOdPLU2gFE1OZNb2";
