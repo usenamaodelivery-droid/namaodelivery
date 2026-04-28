@@ -42,12 +42,12 @@ input, select, textarea {
   border: 2px solid transparent;
   transition: 0.2s;
 }
-.input-field:focus { border-color: #F5C518; background: #fff; }
+.input-field:focus { border-color: #E8B93A; background: #fff; }
 
 /* ===== Tabs Cliente / Entregador ===== */
 .tab-active {
-  border-bottom: 4px solid #2956C8;
-  color: #2956C8;
+  border-bottom: 4px solid #1B304F;
+  color: #1B304F;
   font-weight: 800;
   font-size: 15px;
 }
@@ -64,11 +64,11 @@ input, select, textarea {
   transition: all 0.15s ease;
 }
 #bottom-nav button.active i {
-  color: #2956C8;
+  color: #1B304F;
   transform: scale(1.15);
 }
 #bottom-nav button.active span {
-  color: #2956C8;
+  color: #1B304F;
   font-weight: 800;
 }
 #bottom-nav button:not(.active) i,
@@ -79,26 +79,26 @@ input, select, textarea {
 /* ===== Botões grandes (CTAs) ===== */
 .btn-primary {
   min-height: 56px;
-  background: linear-gradient(135deg, #2956C8 0%, #5B7FE0 100%);
+  background: linear-gradient(135deg, #1B304F 0%, #2E4A75 100%);
   color: #fff;
   font-weight: 800;
   border-radius: 16px;
   font-size: 16px;
   letter-spacing: 0.02em;
-  box-shadow: 0 8px 20px -4px rgba(41, 86, 200, 0.4);
+  box-shadow: 0 8px 20px -4px rgba(27, 48, 79, 0.4);
   transition: transform 0.1s ease, box-shadow 0.2s ease;
 }
-.btn-primary:active { transform: scale(0.97); box-shadow: 0 4px 10px -2px rgba(41, 86, 200, 0.4); }
+.btn-primary:active { transform: scale(0.97); box-shadow: 0 4px 10px -2px rgba(27, 48, 79, 0.4); }
 
 .btn-accent {
   min-height: 56px;
-  background: linear-gradient(135deg, #F5C518 0%, #D4A510 100%);
-  color: #1740A8;
+  background: linear-gradient(135deg, #E8B93A 0%, #BE9320 100%);
+  color: #0F1F3A;
   font-weight: 900;
   border-radius: 16px;
   font-size: 16px;
   letter-spacing: 0.02em;
-  box-shadow: 0 8px 20px -4px rgba(245, 197, 24, 0.5);
+  box-shadow: 0 8px 20px -4px rgba(232, 185, 58, 0.5);
   transition: transform 0.1s ease, box-shadow 0.2s ease;
 }
 .btn-accent:active { transform: scale(0.97); }
@@ -123,28 +123,28 @@ input, select, textarea {
 }
 
 .card-primary-gradient {
-  background: linear-gradient(135deg, #2956C8 0%, #1740A8 100%);
+  background: linear-gradient(135deg, #1B304F 0%, #0F1F3A 100%);
   color: #fff;
   border-radius: 22px;
-  box-shadow: 0 10px 30px -8px rgba(41, 86, 200, 0.5);
+  box-shadow: 0 10px 30px -8px rgba(27, 48, 79, 0.5);
 }
 
 .card-accent-gradient {
-  background: linear-gradient(135deg, #F5C518 0%, #FCE38C 100%);
-  color: #1740A8;
+  background: linear-gradient(135deg, #E8B93A 0%, #F5DC8A 100%);
+  color: #0F1F3A;
   border-radius: 22px;
-  box-shadow: 0 10px 30px -8px rgba(245, 197, 24, 0.5);
+  box-shadow: 0 10px 30px -8px rgba(232, 185, 58, 0.5);
 }
 
 /* ===== Banner CTA Virar Entregador (super destacado) ===== */
 .cta-driver {
-  background: linear-gradient(135deg, #F5C518 0%, #FCE38C 60%, #F5C518 100%);
+  background: linear-gradient(135deg, #E8B93A 0%, #F5DC8A 60%, #E8B93A 100%);
   border-radius: 22px;
   padding: 20px;
   position: relative;
   overflow: hidden;
-  box-shadow: 0 12px 30px -8px rgba(245, 197, 24, 0.6);
-  border: 2px solid #D4A510;
+  box-shadow: 0 12px 30px -8px rgba(232, 185, 58, 0.6);
+  border: 2px solid #BE9320;
 }
 .cta-driver::after {
   content: '';
@@ -178,9 +178,9 @@ input, select, textarea {
   letter-spacing: 0.04em;
 }
 .filter-pill.active {
-  background: #2956C8;
+  background: #1B304F;
   color: #fff;
-  box-shadow: 0 4px 10px -2px rgba(41, 86, 200, 0.4);
+  box-shadow: 0 4px 10px -2px rgba(27, 48, 79, 0.4);
 }
 .filter-pill:not(.active) {
   color: #6B7280;
