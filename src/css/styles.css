@@ -46,8 +46,8 @@ input, select, textarea {
 
 /* ===== Tabs Cliente / Entregador ===== */
 .tab-active {
-  border-bottom: 4px solid #22417A;
-  color: #22417A;
+  border-bottom: 4px solid #2956C8;
+  color: #2956C8;
   font-weight: 800;
   font-size: 15px;
 }
@@ -64,11 +64,11 @@ input, select, textarea {
   transition: all 0.15s ease;
 }
 #bottom-nav button.active i {
-  color: #22417A;
+  color: #2956C8;
   transform: scale(1.15);
 }
 #bottom-nav button.active span {
-  color: #22417A;
+  color: #2956C8;
   font-weight: 800;
 }
 #bottom-nav button:not(.active) i,
@@ -79,21 +79,21 @@ input, select, textarea {
 /* ===== Botões grandes (CTAs) ===== */
 .btn-primary {
   min-height: 56px;
-  background: linear-gradient(135deg, #22417A 0%, #3358A0 100%);
+  background: linear-gradient(135deg, #2956C8 0%, #5B7FE0 100%);
   color: #fff;
   font-weight: 800;
   border-radius: 16px;
   font-size: 16px;
   letter-spacing: 0.02em;
-  box-shadow: 0 8px 20px -4px rgba(34, 65, 122, 0.4);
+  box-shadow: 0 8px 20px -4px rgba(41, 86, 200, 0.4);
   transition: transform 0.1s ease, box-shadow 0.2s ease;
 }
-.btn-primary:active { transform: scale(0.97); box-shadow: 0 4px 10px -2px rgba(34, 65, 122, 0.4); }
+.btn-primary:active { transform: scale(0.97); box-shadow: 0 4px 10px -2px rgba(41, 86, 200, 0.4); }
 
 .btn-accent {
   min-height: 56px;
   background: linear-gradient(135deg, #F5C518 0%, #D4A510 100%);
-  color: #152C57;
+  color: #1740A8;
   font-weight: 900;
   border-radius: 16px;
   font-size: 16px;
@@ -123,15 +123,15 @@ input, select, textarea {
 }
 
 .card-primary-gradient {
-  background: linear-gradient(135deg, #22417A 0%, #152C57 100%);
+  background: linear-gradient(135deg, #2956C8 0%, #1740A8 100%);
   color: #fff;
   border-radius: 22px;
-  box-shadow: 0 10px 30px -8px rgba(34, 65, 122, 0.5);
+  box-shadow: 0 10px 30px -8px rgba(41, 86, 200, 0.5);
 }
 
 .card-accent-gradient {
   background: linear-gradient(135deg, #F5C518 0%, #FCE38C 100%);
-  color: #152C57;
+  color: #1740A8;
   border-radius: 22px;
   box-shadow: 0 10px 30px -8px rgba(245, 197, 24, 0.5);
 }
@@ -178,9 +178,9 @@ input, select, textarea {
   letter-spacing: 0.04em;
 }
 .filter-pill.active {
-  background: #22417A;
+  background: #2956C8;
   color: #fff;
-  box-shadow: 0 4px 10px -2px rgba(34, 65, 122, 0.4);
+  box-shadow: 0 4px 10px -2px rgba(41, 86, 200, 0.4);
 }
 .filter-pill:not(.active) {
   color: #6B7280;
