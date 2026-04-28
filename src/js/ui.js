@@ -82,8 +82,8 @@ export function switchMainTab(tab) {
   document.getElementById(`view-${tab}`)?.classList.remove("hidden");
   const btnCliente = document.getElementById("btn-cliente");
   const btnEntregador = document.getElementById("btn-entregador");
-  if (btnCliente) btnCliente.className = `flex-1 py-3 transition ${tab === "cliente" ? "tab-active" : "tab-inactive"}`;
-  if (btnEntregador) btnEntregador.className = `flex-1 py-3 transition ${tab === "entregador" ? "tab-active" : "tab-inactive"}`;
+  if (btnCliente) btnCliente.className = `flex-1 py-4 transition ${tab === "cliente" ? "tab-active" : "tab-inactive"}`;
+  if (btnEntregador) btnEntregador.className = `flex-1 py-4 transition ${tab === "entregador" ? "tab-active" : "tab-inactive"}`;
 }
 
 export function updateFileLabel(inputId, labelId) {

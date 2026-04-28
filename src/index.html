@@ -16,12 +16,18 @@
             theme: {
                 extend: {
                     colors: {
-                        primary: '#172B4D',
-                        primaryDark: '#0B1526',
-                        accent: '#C9A84C',
-                        accentLight: '#E8D499',
+                        primary: '#22417A',
+                        primaryDark: '#152C57',
+                        primaryLight: '#3358A0',
+                        accent: '#F5C518',
+                        accentDark: '#D4A510',
+                        accentLight: '#FCE38C',
                         danger: '#ef4444',
-                        success: '#22c55e'
+                        success: '#10B981'
+                    },
+                    fontSize: {
+                        'tiny': '11px',
+                        'mini': '12px'
                     }
                 }
             }
@@ -34,34 +40,34 @@
     <div class="bg-white w-full h-full max-w-md shadow-2xl relative overflow-hidden flex flex-col sm:h-[850px] sm:rounded-[2rem] sm:border-8 border-gray-900">
 
         <!-- SPLASH SCREEN -->
-        <div id="splash-screen" class="absolute inset-0 bg-primary z-[100] flex flex-col items-center justify-center transition-opacity duration-500">
-            <img src="icons/namao-icon.png" alt="Logo NaMão" class="w-36 h-36 rounded-3xl shadow-2xl mb-6 animate-bounce" onerror="this.onerror=null; this.src='https://via.placeholder.com/150/172B4D/C9A84C?text=N'">
-            <h1 class="text-4xl font-bold tracking-tight text-white"><span class="text-accent">Na</span>Mão</h1>
-            <p class="text-accent mt-2 text-sm tracking-widest uppercase font-bold">Delivery</p>
-            <div class="mt-10 border-4 border-accent border-t-transparent rounded-full w-8 h-8 animate-spin"></div>
+        <div id="splash-screen" class="absolute inset-0 z-[100] flex flex-col items-center justify-center transition-opacity duration-500" style="background: linear-gradient(135deg, #22417A 0%, #152C57 100%);">
+            <img src="icons/namao-icon.png" alt="Logo NaMão" class="w-36 h-36 rounded-3xl shadow-2xl mb-6 animate-bounce" onerror="this.onerror=null; this.src='https://via.placeholder.com/150/22417A/F5C518?text=N'">
+            <h1 class="text-5xl font-black tracking-tight text-white"><span class="text-accent">Na</span>Mão</h1>
+            <p class="text-accent mt-2 text-base tracking-[0.3em] uppercase font-extrabold">Delivery</p>
+            <div class="mt-10 border-4 border-accent border-t-transparent rounded-full w-10 h-10 animate-spin"></div>
         </div>
 
         <!-- OVERLAY DE BANIMENTO -->
         <div id="account-blocked-overlay" class="absolute inset-0 hidden bg-primaryDark z-[200] flex flex-col items-center justify-center p-8 text-center text-white fade-in">
-            <i class="fa-solid fa-user-lock text-6xl text-danger mb-6"></i>
-            <h2 class="text-2xl font-black mb-2 uppercase tracking-tighter">Acesso Negado</h2>
-            <p id="block-message" class="text-gray-400 text-sm mb-8">Esta conta foi suspensa por violar as regras de segurança.</p>
-            <button onclick="openWhatsAppSupport()" class="bg-accent text-primary font-black py-4 px-8 rounded-2xl w-full uppercase tracking-widest">Falar com Suporte</button>
-            <button onclick="signOutUser()" class="text-gray-500 mt-4 text-xs uppercase tracking-widest">Sair</button>
+            <i class="fa-solid fa-user-lock text-7xl text-danger mb-6"></i>
+            <h2 class="text-3xl font-black mb-3 uppercase tracking-tight">Acesso Negado</h2>
+            <p id="block-message" class="text-gray-200 text-base mb-8 font-semibold">Esta conta foi suspensa por violar as regras de segurança.</p>
+            <button onclick="openWhatsAppSupport()" class="btn-accent w-full uppercase tracking-widest text-lg"><i class="fa-brands fa-whatsapp mr-2"></i>Falar com Suporte</button>
+            <button onclick="signOutUser()" class="text-gray-300 mt-4 text-sm uppercase tracking-widest font-extrabold">Sair</button>
         </div>
 
         <!-- TELA DE AUTENTICAÇÃO -->
-        <div id="auth-screen" class="absolute inset-0 hidden bg-primary z-[150] flex flex-col p-8 fade-in">
+        <div id="auth-screen" class="absolute inset-0 hidden z-[150] flex flex-col p-8 fade-in" style="background: linear-gradient(135deg, #22417A 0%, #152C57 100%);">
             <div class="flex-1 flex flex-col justify-center items-center text-center">
-                <img src="icons/namao-icon.png" class="w-24 h-24 rounded-3xl mb-6 shadow-2xl border-2 border-accent/20" alt="NaMão logo" onerror="this.onerror=null; this.src='https://via.placeholder.com/96/172B4D/C9A84C?text=N'">
-                <h1 class="text-4xl font-black text-white tracking-tighter">Na<span class="text-accent">Mão</span></h1>
-                <p class="text-gray-400 text-xs mt-2 uppercase tracking-[0.3em] mb-10">Delivery de Elite</p>
+                <img src="icons/namao-icon.png" class="w-24 h-24 rounded-3xl mb-6 shadow-2xl border-2 border-accent/40" alt="NaMão logo" onerror="this.onerror=null; this.src='https://via.placeholder.com/96/22417A/F5C518?text=N'">
+                <h1 class="text-5xl font-black text-white tracking-tight">Na<span class="text-accent">Mão</span></h1>
+                <p class="text-gray-200 text-sm font-extrabold mt-2 uppercase tracking-[0.3em] mb-10">Delivery de Elite</p>
 
                 <div class="w-full">
-                    <input type="email" id="auth-email" placeholder="E-mail" class="w-full bg-white/10 border border-white/20 rounded-xl p-4 mb-3 text-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-accent">
-                    <input type="password" id="auth-password" placeholder="Senha" class="w-full bg-white/10 border border-white/20 rounded-xl p-4 mb-4 text-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-accent">
-                    <button onclick="handleAuth('login')" class="w-full bg-accent text-primary font-black py-4 rounded-2xl shadow-xl mb-4 uppercase tracking-widest">Entrar</button>
-                    <button onclick="handleAuth('signup')" class="text-accent text-xs font-bold uppercase tracking-widest hover:opacity-80">Criar Nova Conta</button>
+                    <input type="email" id="auth-email" placeholder="E-mail" class="w-full bg-white/10 border-2 border-white/20 rounded-xl p-4 mb-3 text-white placeholder-gray-300 outline-none focus:ring-2 focus:ring-accent text-base font-semibold">
+                    <input type="password" id="auth-password" placeholder="Senha" class="w-full bg-white/10 border-2 border-white/20 rounded-xl p-4 mb-5 text-white placeholder-gray-300 outline-none focus:ring-2 focus:ring-accent text-base font-semibold">
+                    <button onclick="handleAuth('login')" class="btn-accent w-full uppercase tracking-widest text-lg mb-4">ENTRAR</button>
+                    <button onclick="handleAuth('signup')" class="text-accent text-sm font-extrabold uppercase tracking-widest hover:opacity-80">Criar Nova Conta</button>
                 </div>
             </div>
         </div>
@@ -70,25 +76,25 @@
         <header class="bg-primary text-white p-4 shadow-md z-20 flex justify-between items-center relative">
             <div class="flex items-center gap-3">
                 <img src="icons/namao-icon.png" alt="Logo" class="w-9 h-9 rounded-lg shadow-sm border border-white/10" onerror="this.style.display='none'">
-                <h1 class="text-xl font-bold tracking-tight text-white"><span class="text-accent">Na</span>Mão <span class="text-gray-300 font-light text-sm">Delivery</span></h1>
+                <h1 class="text-2xl font-extrabold tracking-tight text-white"><span class="text-accent">Na</span>Mão <span class="text-gray-300 font-light text-base">Delivery</span></h1>
             </div>
             <div class="flex gap-2">
-                <button onclick="openWhatsAppSupport()" class="bg-primaryDark hover:bg-black px-3 py-1.5 rounded-lg text-xs font-bold border border-white/20 text-accent flex items-center gap-1">
-                    <i class="fa-solid fa-headset"></i>
+                <button onclick="openWhatsAppSupport()" class="bg-primaryDark hover:bg-black px-3 py-2 rounded-xl text-base font-bold border border-white/20 text-accent flex items-center gap-1" aria-label="Suporte">
+                    <i class="fa-solid fa-headset text-lg"></i>
                 </button>
-                <button onclick="promptAdmin()" class="bg-primaryDark hover:bg-black px-3 py-1.5 rounded-lg text-xs font-bold border border-white/20 transition flex items-center gap-2 text-accent">
-                    <i class="fa-solid fa-shield-halved"></i> Adm
+                <button onclick="promptAdmin()" class="bg-primaryDark hover:bg-black px-3 py-2 rounded-xl text-sm font-extrabold border border-white/20 transition flex items-center gap-2 text-accent">
+                    <i class="fa-solid fa-shield-halved"></i> ADM
                 </button>
             </div>
         </header>
 
         <!-- TABS MODO (só na tela Início) -->
         <div id="main-tabs" class="flex bg-white border-b shadow-sm z-10">
-            <button id="btn-cliente" class="flex-1 py-3 tab-active transition" onclick="switchMainTab('cliente')">
-                <i class="fa-solid fa-user mr-1"></i> Cliente
+            <button id="btn-cliente" class="flex-1 py-4 tab-active transition" onclick="switchMainTab('cliente')">
+                <i class="fa-solid fa-user mr-1.5"></i> Cliente
             </button>
-            <button id="btn-entregador" class="flex-1 py-3 tab-inactive transition" onclick="switchMainTab('entregador')">
-                <i class="fa-solid fa-motorcycle mr-1"></i> Entregador
+            <button id="btn-entregador" class="flex-1 py-4 tab-inactive transition" onclick="switchMainTab('entregador')">
+                <i class="fa-solid fa-motorcycle mr-1.5"></i> Entregador
             </button>
         </div>
 
@@ -98,8 +104,8 @@
             <!-- VIEW: CLIENTE -->
             <main id="view-cliente" class="absolute inset-0 overflow-y-auto no-scrollbar pb-24 fade-in">
                 <div class="p-5 bg-white mb-1">
-                    <h2 class="text-2xl font-bold text-primary">Nova Entrega</h2>
-                    <p class="text-sm text-gray-500">Rápido, seguro e de confiança.</p>
+                    <h2 class="text-3xl font-extrabold text-primary tracking-tight">Nova Entrega</h2>
+                    <p class="text-base text-gray-500 mt-1">Rápido, seguro e de confiança.</p>
                 </div>
                 <div class="px-4">
                     <div id="map-cliente" class="w-full h-44 bg-gray-200 rounded-2xl mb-4 border border-gray-200 shadow-inner"></div>
@@ -107,27 +113,27 @@
 
                         <!-- Tipo de Item -->
                         <div class="bg-white p-3 rounded-xl shadow-sm border border-gray-200">
-                            <h3 class="text-xs font-bold text-gray-500 uppercase mb-2">O que vai enviar?</h3>
+                            <h3 class="text-sm font-extrabold text-gray-600 uppercase tracking-wider mb-3">O que vai enviar?</h3>
                             <div class="grid grid-cols-3 gap-2">
                                 <label class="cursor-pointer">
                                     <input type="radio" name="itemType" value="Comida" class="peer sr-only" checked onchange="updateVehicleSuggestion()">
-                                    <div class="text-center p-2 rounded-xl border border-gray-200 peer-checked:border-primary peer-checked:bg-blue-50 transition">
-                                        <i class="fa-solid fa-burger text-lg text-primary mb-1"></i>
-                                        <p class="text-[10px] font-bold uppercase text-primary">Comida</p>
+                                    <div class="text-center p-3 rounded-xl border-2 border-gray-200 peer-checked:border-primary peer-checked:bg-blue-50 transition">
+                                        <i class="fa-solid fa-burger text-2xl text-primary mb-2"></i>
+                                        <p class="text-sm font-extrabold uppercase text-primary">Comida</p>
                                     </div>
                                 </label>
                                 <label class="cursor-pointer">
                                     <input type="radio" name="itemType" value="Documentos" class="peer sr-only" onchange="updateVehicleSuggestion()">
-                                    <div class="text-center p-2 rounded-xl border border-gray-200 peer-checked:border-primary peer-checked:bg-blue-50 transition">
-                                        <i class="fa-solid fa-file-alt text-lg text-primary mb-1"></i>
-                                        <p class="text-[10px] font-bold uppercase text-primary">Docs</p>
+                                    <div class="text-center p-3 rounded-xl border-2 border-gray-200 peer-checked:border-primary peer-checked:bg-blue-50 transition">
+                                        <i class="fa-solid fa-file-alt text-2xl text-primary mb-2"></i>
+                                        <p class="text-sm font-extrabold uppercase text-primary">Docs</p>
                                     </div>
                                 </label>
                                 <label class="cursor-pointer">
                                     <input type="radio" name="itemType" value="Caixas" class="peer sr-only" onchange="updateVehicleSuggestion()">
-                                    <div class="text-center p-2 rounded-xl border border-gray-200 peer-checked:border-primary peer-checked:bg-blue-50 transition">
-                                        <i class="fa-solid fa-box-open text-lg text-primary mb-1"></i>
-                                        <p class="text-[10px] font-bold uppercase text-primary">Caixas</p>
+                                    <div class="text-center p-3 rounded-xl border-2 border-gray-200 peer-checked:border-primary peer-checked:bg-blue-50 transition">
+                                        <i class="fa-solid fa-box-open text-2xl text-primary mb-2"></i>
+                                        <p class="text-sm font-extrabold uppercase text-primary">Caixas</p>
                                     </div>
                                 </label>
                             </div>
@@ -138,11 +144,11 @@
                             <div class="absolute left-5 top-8 bottom-8 w-0.5 bg-gray-200"></div>
                             <div class="flex items-start gap-3 mb-3 relative">
                                 <div class="mt-1 w-3.5 h-3.5 rounded-full border-4 border-primary bg-white z-10"></div>
-                                <input type="text" id="origem" placeholder="Retirada (ex: Minha localização)" required class="w-full bg-gray-50 border border-gray-100 rounded p-2 text-sm focus:ring-1 focus:ring-primary outline-none">
+                                <input type="text" id="origem" placeholder="Retirada (ex: Minha localização)" required class="w-full bg-gray-50 border-2 border-gray-100 rounded-xl p-3.5 text-base font-semibold focus:ring-2 focus:ring-primary focus:border-primary outline-none">
                             </div>
                             <div class="flex items-start gap-3 relative">
                                 <div class="mt-1 w-3.5 h-3.5 rounded-full border-4 border-accent bg-white z-10"></div>
-                                <input type="text" id="destino" placeholder="Entrega (toque no mapa pra escolher)" required class="w-full bg-gray-50 border border-gray-100 rounded p-2 text-sm focus:ring-1 focus:ring-primary outline-none">
+                                <input type="text" id="destino" placeholder="Entrega (toque no mapa pra escolher)" required class="w-full bg-gray-50 border-2 border-gray-100 rounded-xl p-3.5 text-base font-semibold focus:ring-2 focus:ring-accent focus:border-accent outline-none">
                             </div>
                         </div>
 
@@ -150,34 +156,34 @@
                         <div class="grid grid-cols-2 gap-3">
                             <label class="cursor-pointer">
                                 <input type="radio" name="vehicle" id="veh-moto" value="Moto" class="peer sr-only" checked onchange="calculatePrice()">
-                                <div class="flex items-center justify-center p-3 rounded-xl border border-gray-200 peer-checked:border-primary peer-checked:bg-blue-50 transition">
-                                    <i class="fa-solid fa-motorcycle text-lg text-primary mr-2"></i>
-                                    <p class="text-sm font-bold text-primary">Moto</p>
+                                <div class="flex items-center justify-center p-4 rounded-xl border-2 border-gray-200 peer-checked:border-primary peer-checked:bg-blue-50 transition">
+                                    <i class="fa-solid fa-motorcycle text-2xl text-primary mr-3"></i>
+                                    <p class="text-base font-extrabold text-primary">Moto</p>
                                 </div>
                             </label>
                             <label class="cursor-pointer">
                                 <input type="radio" name="vehicle" id="veh-carro" value="Carro" class="peer sr-only" onchange="calculatePrice()">
-                                <div class="flex items-center justify-center p-3 rounded-xl border border-gray-200 peer-checked:border-primary peer-checked:bg-blue-50 transition">
-                                    <i class="fa-solid fa-car text-lg text-primary mr-2"></i>
-                                    <p class="text-sm font-bold text-primary">Carro</p>
+                                <div class="flex items-center justify-center p-4 rounded-xl border-2 border-gray-200 peer-checked:border-primary peer-checked:bg-blue-50 transition">
+                                    <i class="fa-solid fa-car text-2xl text-primary mr-3"></i>
+                                    <p class="text-base font-extrabold text-primary">Carro</p>
                                 </div>
                             </label>
                         </div>
 
                         <!-- Card de preço -->
-                        <div class="bg-primary p-5 rounded-2xl flex justify-between items-center text-white shadow-2xl relative overflow-hidden">
+                        <div class="card-primary-gradient p-5 flex justify-between items-center relative overflow-hidden">
                             <div class="absolute right-0 top-0 opacity-10 translate-x-4 -translate-y-4"><i class="fa-solid fa-wallet text-7xl"></i></div>
                             <div>
-                                <p class="text-[9px] text-accent font-black uppercase tracking-widest mb-1">Preço Sugerido</p>
-                                <p id="calc-total" class="text-4xl font-black">R$ 0,00</p>
+                                <p class="text-xs text-accent font-extrabold uppercase tracking-widest mb-1">Preço Sugerido</p>
+                                <p id="calc-total" class="text-5xl font-black">R$ 0,00</p>
                             </div>
                             <div class="text-right">
-                                <p id="calc-km" class="text-[10px] font-black opacity-50 uppercase">0.0 KM</p>
+                                <p id="calc-km" class="text-sm font-extrabold opacity-70 uppercase">0.0 KM</p>
                             </div>
                         </div>
 
-                        <button type="submit" class="w-full bg-primary hover:bg-primaryDark text-white font-bold py-4 rounded-xl shadow-lg transition transform active:scale-95 flex justify-center items-center gap-2 text-lg">
-                            <i class="fa-solid fa-bolt text-accent"></i> Solicitar Entrega
+                        <button type="submit" class="btn-accent w-full flex justify-center items-center gap-2 text-lg">
+                            <i class="fa-solid fa-bolt"></i> SOLICITAR ENTREGA
                         </button>
                     </form>
                 </div>
@@ -196,15 +202,15 @@
 
                 <div class="bg-white shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.1)] z-20 rounded-t-3xl relative -mt-4 flex flex-col max-h-[50%] border-t border-gray-100">
                     <div class="w-12 h-1.5 bg-gray-300 rounded-full mx-auto my-3"></div>
-                    <div class="px-5 pb-2 flex justify-between items-center">
+                    <div class="px-5 pb-3 flex justify-between items-center">
                         <div class="flex items-center gap-2">
                             <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_#22c55e]"></div>
-                            <h2 class="text-sm font-bold text-primary">Corridas Disponíveis</h2>
+                            <h2 class="text-lg font-extrabold text-primary">Corridas Disponíveis</h2>
                         </div>
-                        <div class="bg-gray-100 p-1 rounded-lg flex text-xs">
-                            <button id="filter-todos" class="px-3 py-1 bg-primary text-white rounded font-bold shadow-sm" onclick="setDriverFilter('Todos')">Tudo</button>
-                            <button id="filter-moto" class="px-3 py-1 text-gray-500 font-bold" onclick="setDriverFilter('Moto')">Moto</button>
-                            <button id="filter-carro" class="px-3 py-1 text-gray-500 font-bold" onclick="setDriverFilter('Carro')">Carro</button>
+                        <div class="bg-gray-100 p-1 rounded-xl flex gap-1">
+                            <button id="filter-todos" class="filter-pill active" onclick="setDriverFilter('Todos')">TUDO</button>
+                            <button id="filter-moto" class="filter-pill" onclick="setDriverFilter('Moto')">MOTO</button>
+                            <button id="filter-carro" class="filter-pill" onclick="setDriverFilter('Carro')">CARRO</button>
                         </div>
                     </div>
                     <div class="px-4 pb-4 overflow-y-auto no-scrollbar flex-1">
@@ -216,8 +222,8 @@
             <!-- VIEW: ATIVIDADE / HISTÓRICO -->
             <main id="view-atividade" class="absolute inset-0 overflow-y-auto bg-gray-50 no-scrollbar hidden fade-in pb-24">
                 <div class="p-5 bg-white border-b shadow-sm sticky top-0 z-10">
-                    <h2 class="text-xl font-bold text-primary">Minhas Entregas</h2>
-                    <p class="text-xs text-gray-500">Acompanhe seus pedidos em andamento.</p>
+                    <h2 class="text-2xl font-extrabold text-primary tracking-tight">Minhas Entregas</h2>
+                    <p class="text-base text-gray-500 mt-1">Acompanhe seus pedidos em andamento.</p>
                 </div>
                 <div class="p-5">
                     <div id="customer-orders-list" class="space-y-3"></div>
@@ -226,30 +232,45 @@
 
             <!-- VIEW: PERFIL -->
             <main id="view-perfil" class="absolute inset-0 overflow-y-auto bg-gray-50 no-scrollbar hidden fade-in pb-24">
-                <div class="p-6 bg-primary text-white text-center rounded-b-3xl shadow-md relative">
+                <div class="p-6 card-primary-gradient text-white text-center shadow-md relative" style="border-radius: 0 0 28px 28px;">
                     <div class="w-24 h-24 bg-white text-primary rounded-full mx-auto mb-3 flex items-center justify-center text-4xl border-4 border-accent shadow-lg">
                         <i class="fa-solid fa-user"></i>
                     </div>
-                    <h2 id="profile-display-name" class="text-xl font-bold">Cliente</h2>
-                    <p id="profile-status" class="text-accent text-sm font-bold mt-1">Status: Cliente <i class="fa-solid fa-circle-check"></i></p>
+                    <h2 id="profile-display-name" class="text-2xl font-extrabold">Cliente</h2>
+                    <p id="profile-status" class="text-accent text-base font-bold mt-1">Status: Cliente <i class="fa-solid fa-circle-check"></i></p>
                 </div>
-                <div class="p-5 space-y-4">
-                    <div id="driver-wallet-btn" class="hidden bg-primaryDark p-5 rounded-2xl border border-accent/20 text-white flex justify-between items-center shadow-2xl cursor-pointer" onclick="openDriverWallet()">
+                <div class="p-5 space-y-5">
+                    <div id="driver-wallet-btn" class="hidden card-primary-gradient p-6 flex justify-between items-center cursor-pointer" onclick="openDriverWallet()">
                         <div>
-                            <p class="text-[9px] font-black text-accent uppercase mb-1">Meus Ganhos (85%)</p>
-                            <p class="text-3xl font-black">R$ <span id="profile-wallet-balance">0,00</span></p>
+                            <p class="text-xs font-extrabold text-accent uppercase tracking-widest mb-1">Meus Ganhos (85%)</p>
+                            <p class="text-4xl font-black">R$ <span id="profile-wallet-balance">0,00</span></p>
                         </div>
-                        <i class="fa-solid fa-wallet text-3xl text-accent"></i>
+                        <i class="fa-solid fa-wallet text-4xl text-accent"></i>
                     </div>
-                    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-                        <h3 class="text-xs font-bold text-gray-400 mb-3 uppercase tracking-wider">Conta</h3>
-                        <ul class="space-y-4">
-                            <li class="flex justify-between items-center text-primary text-sm font-bold cursor-pointer hover:text-accent" onclick="switchView('driver-registration')"><span class="flex items-center gap-3"><i class="fa-solid fa-motorcycle text-gray-400 w-5"></i> Virar Entregador</span> <i class="fa-solid fa-chevron-right text-gray-300 text-xs"></i></li>
-                            <li class="flex justify-between items-center text-primary text-sm font-bold cursor-pointer hover:text-accent" onclick="openWhatsAppSupport()"><span class="flex items-center gap-3"><i class="fa-solid fa-circle-question text-gray-400 w-5"></i> Ajuda &amp; Suporte</span> <i class="fa-solid fa-chevron-right text-gray-300 text-xs"></i></li>
+
+                    <button id="cta-driver-banner" type="button" onclick="switchView('driver-registration')" class="cta-driver w-full text-left flex items-center gap-4 active:scale-[0.98] transition">
+                        <div class="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center shadow-lg flex-shrink-0">
+                            <i class="fa-solid fa-motorcycle text-3xl text-accent"></i>
+                        </div>
+                        <div class="flex-1 z-10">
+                            <p class="text-tiny font-black text-primary uppercase tracking-widest mb-0.5">É motorista? Ganhe até 85%</p>
+                            <p class="text-xl font-black text-primary leading-tight">VIRAR ENTREGADOR</p>
+                            <p class="text-sm font-bold text-primary/80">Aprovação automática em 2 min →</p>
+                        </div>
+                        <i class="fa-solid fa-chevron-right text-2xl text-primary z-10"></i>
+                    </button>
+
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
+                        <h3 class="text-sm font-extrabold text-gray-500 mb-4 uppercase tracking-wider">Conta</h3>
+                        <ul class="space-y-1">
+                            <li class="flex justify-between items-center text-primary text-base font-bold cursor-pointer hover:bg-gray-50 -mx-2 px-2 py-3 rounded-xl" onclick="openWhatsAppSupport()"><span class="flex items-center gap-3"><i class="fa-brands fa-whatsapp text-success text-xl w-6"></i> Ajuda &amp; Suporte</span> <i class="fa-solid fa-chevron-right text-gray-300"></i></li>
+                            <li class="flex justify-between items-center text-primary text-base font-bold cursor-pointer hover:bg-gray-50 -mx-2 px-2 py-3 rounded-xl" onclick="promptAdmin()"><span class="flex items-center gap-3"><i class="fa-solid fa-shield-halved text-primary text-xl w-6"></i> Acesso Admin</span> <i class="fa-solid fa-chevron-right text-gray-300"></i></li>
                         </ul>
                     </div>
-                    <button onclick="signOutUser()" class="w-full bg-red-50 text-red-600 font-bold py-3 rounded-xl shadow-sm border border-red-200 hover:bg-red-100 transition">Sair da Conta</button>
-                    <p class="text-center text-[10px] text-gray-400 mt-4">NaMão Delivery v1.1 Premium</p>
+                    <button onclick="signOutUser()" class="w-full bg-red-50 text-danger font-extrabold py-4 rounded-2xl shadow-sm border-2 border-red-200 hover:bg-red-100 transition text-base">
+                        <i class="fa-solid fa-right-from-bracket mr-2"></i> Sair da Conta
+                    </button>
+                    <p class="text-center text-xs text-gray-400 mt-2 font-semibold">NaMão Delivery v1.2 Premium</p>
                 </div>
             </main>
 
@@ -263,76 +284,76 @@
                             <i class="fa-solid fa-bolt text-[10px] text-white"></i>
                         </div>
                     </div>
-                    <h2 class="text-xl font-bold">Aprovação Automática</h2>
-                    <p class="text-gray-300 text-[11px] mt-1 px-4">Envie seus documentos para análise em tempo real pela nossa IA.</p>
+                    <h2 class="text-2xl font-extrabold">Aprovação Automática</h2>
+                    <p class="text-gray-200 text-sm mt-1 px-4 font-semibold">Envie seus documentos para análise em tempo real pela nossa IA.</p>
                 </div>
                 <div class="p-5">
                     <form id="driverRegistrationForm" onsubmit="registerDriver(event)" class="space-y-4">
 
                         <!-- Dados Pessoais -->
                         <div class="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-3">
-                            <h3 class="text-xs font-bold text-gray-500 uppercase border-b pb-1 mb-2">Dados Pessoais</h3>
-                            <input type="text" id="driver-name" required placeholder="Nome Completo" class="w-full bg-gray-50 border border-gray-100 rounded-lg p-2.5 text-sm focus:ring-1 focus:ring-primary outline-none">
+                            <h3 class="text-sm font-extrabold text-gray-600 uppercase tracking-wider border-b pb-2 mb-3">Dados Pessoais</h3>
+                            <input type="text" id="driver-name" required placeholder="Nome Completo" class="input-field">
                             <div class="grid grid-cols-2 gap-2">
-                                <input type="text" id="driver-cpf" required placeholder="CPF (teste com 171)" class="w-full bg-gray-50 border border-gray-100 rounded-lg p-2.5 text-sm focus:ring-1 focus:ring-primary outline-none">
-                                <input type="tel" id="driver-phone" required placeholder="WhatsApp" class="w-full bg-gray-50 border border-gray-100 rounded-lg p-2.5 text-sm focus:ring-1 focus:ring-primary outline-none">
+                                <input type="text" id="driver-cpf" required placeholder="CPF (teste com 171)" class="input-field">
+                                <input type="tel" id="driver-phone" required placeholder="WhatsApp" class="input-field">
                             </div>
                         </div>
 
                         <!-- Verificação Biométrica -->
                         <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-sm space-y-4">
-                            <h3 class="text-xs font-bold text-primary uppercase flex items-center gap-1"><i class="fa-solid fa-fingerprint"></i> Verificação Biométrica</h3>
+                            <h3 class="text-sm font-extrabold text-primary uppercase tracking-wider flex items-center gap-2"><i class="fa-solid fa-fingerprint text-base"></i> Verificação Biométrica</h3>
                             <div class="relative">
-                                <label class="block text-xs font-bold text-primary mb-1">1. Foto da Habilitação (CNH)</label>
+                                <label class="block text-sm font-extrabold text-primary mb-2">1. Foto da Habilitação (CNH)</label>
                                 <div class="flex items-center justify-center w-full">
-                                    <label class="flex flex-col items-center justify-center w-full h-20 border-2 border-blue-300 border-dashed rounded-lg cursor-pointer bg-white hover:bg-blue-50 transition">
+                                    <label class="flex flex-col items-center justify-center w-full h-28 border-2 border-blue-300 border-dashed rounded-xl cursor-pointer bg-white hover:bg-blue-50 transition">
                                         <div class="flex flex-col items-center justify-center pt-3 pb-4">
-                                            <i class="fa-solid fa-camera text-primary text-xl mb-1"></i>
-                                            <p class="text-[10px] text-primary font-semibold">Tirar foto da CNH</p>
+                                            <i class="fa-solid fa-camera text-primary text-3xl mb-2"></i>
+                                            <p class="text-sm text-primary font-extrabold">Tirar foto da CNH</p>
                                         </div>
                                         <input id="driver-cnh" type="file" accept="image/*" capture="environment" class="hidden" required onchange="updateFileLabel('driver-cnh', 'label-cnh')" />
                                     </label>
                                 </div>
-                                <p id="label-cnh" class="text-[10px] text-center text-green-600 font-bold mt-1 hidden"><i class="fa-solid fa-check"></i> CNH Anexada</p>
+                                <p id="label-cnh" class="text-sm text-center text-success font-extrabold mt-2 hidden"><i class="fa-solid fa-check"></i> CNH Anexada</p>
                             </div>
 
                             <div class="relative">
-                                <label class="block text-xs font-bold text-primary mb-1">2. Selfie (rosto visível)</label>
+                                <label class="block text-sm font-extrabold text-primary mb-2">2. Selfie (rosto visível)</label>
                                 <div class="flex items-center justify-center w-full">
-                                    <label class="flex flex-col items-center justify-center w-full h-20 border-2 border-blue-300 border-dashed rounded-lg cursor-pointer bg-white hover:bg-blue-50 transition">
+                                    <label class="flex flex-col items-center justify-center w-full h-28 border-2 border-blue-300 border-dashed rounded-xl cursor-pointer bg-white hover:bg-blue-50 transition">
                                         <div class="flex flex-col items-center justify-center pt-3 pb-4">
-                                            <i class="fa-solid fa-user-astronaut text-primary text-xl mb-1"></i>
-                                            <p class="text-[10px] text-primary font-semibold">Tirar selfie</p>
+                                            <i class="fa-solid fa-user-astronaut text-primary text-3xl mb-2"></i>
+                                            <p class="text-sm text-primary font-extrabold">Tirar selfie</p>
                                         </div>
                                         <input id="driver-selfie" type="file" accept="image/*" capture="user" class="hidden" required onchange="updateFileLabel('driver-selfie', 'label-selfie')" />
                                     </label>
                                 </div>
-                                <p id="label-selfie" class="text-[10px] text-center text-green-600 font-bold mt-1 hidden"><i class="fa-solid fa-check"></i> Selfie Anexada</p>
+                                <p id="label-selfie" class="text-sm text-center text-success font-extrabold mt-2 hidden"><i class="fa-solid fa-check"></i> Selfie Anexada</p>
                             </div>
                         </div>
 
                         <!-- Dados do Veículo -->
                         <div class="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-3">
-                            <h3 class="text-xs font-bold text-gray-500 uppercase border-b pb-1">Veículo</h3>
+                            <h3 class="text-sm font-extrabold text-gray-600 uppercase tracking-wider border-b pb-2">Veículo</h3>
                             <div class="grid grid-cols-2 gap-3">
                                 <label class="cursor-pointer">
                                     <input type="radio" name="reg-vehicle" value="Moto" class="peer sr-only" checked>
-                                    <div class="flex items-center justify-center p-2 rounded-lg border border-gray-200 peer-checked:border-primary peer-checked:bg-blue-50 transition">
-                                        <i class="fa-solid fa-motorcycle text-base text-primary mr-2"></i> <span class="font-bold text-sm text-primary">Moto</span>
+                                    <div class="flex items-center justify-center p-3 rounded-xl border-2 border-gray-200 peer-checked:border-primary peer-checked:bg-blue-50 transition">
+                                        <i class="fa-solid fa-motorcycle text-xl text-primary mr-2"></i> <span class="font-extrabold text-base text-primary">Moto</span>
                                     </div>
                                 </label>
                                 <label class="cursor-pointer">
                                     <input type="radio" name="reg-vehicle" value="Carro" class="peer sr-only">
-                                    <div class="flex items-center justify-center p-2 rounded-lg border border-gray-200 peer-checked:border-primary peer-checked:bg-blue-50 transition">
-                                        <i class="fa-solid fa-car text-base text-primary mr-2"></i> <span class="font-bold text-sm text-primary">Carro</span>
+                                    <div class="flex items-center justify-center p-3 rounded-xl border-2 border-gray-200 peer-checked:border-primary peer-checked:bg-blue-50 transition">
+                                        <i class="fa-solid fa-car text-xl text-primary mr-2"></i> <span class="font-extrabold text-base text-primary">Carro</span>
                                     </div>
                                 </label>
                             </div>
-                            <input type="text" id="driver-plate" required placeholder="Placa (ex: ABC-1234)" class="w-full bg-gray-50 border border-gray-100 rounded-lg p-2.5 text-sm focus:ring-1 focus:ring-primary outline-none uppercase text-center font-bold tracking-widest">
+                            <input type="text" id="driver-plate" required placeholder="PLACA (ex: ABC-1234)" class="input-field uppercase text-center tracking-widest">
                         </div>
 
-                        <button type="submit" class="w-full bg-primary hover:bg-primaryDark text-accent font-bold py-4 rounded-xl shadow-lg transition transform active:scale-95 flex justify-center items-center gap-2 text-base mt-2">
-                            <i class="fa-solid fa-robot"></i> Iniciar Verificação IA
+                        <button type="submit" class="btn-accent w-full flex justify-center items-center gap-2 text-lg mt-2">
+                            <i class="fa-solid fa-robot"></i> INICIAR VERIFICAÇÃO IA
                         </button>
                     </form>
                 </div>
@@ -342,28 +363,28 @@
             <main id="view-admin" class="absolute inset-0 overflow-y-auto bg-gray-100 no-scrollbar hidden fade-in z-50">
                 <div class="bg-primary text-white p-5 shadow-xl">
                     <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-2xl font-bold text-white"><i class="fa-solid fa-chart-pie text-accent mr-2"></i> Painel Gestor</h2>
-                        <button onclick="switchView('inicio')" class="bg-primaryDark p-2 rounded-lg text-gray-400 hover:text-white border border-white/10"><i class="fa-solid fa-times text-xl"></i></button>
+                        <h2 class="text-2xl font-extrabold text-white"><i class="fa-solid fa-chart-pie text-accent mr-2"></i> Painel Gestor</h2>
+                        <button onclick="switchView('inicio')" class="bg-primaryDark p-3 rounded-xl text-gray-300 hover:text-white border border-white/10"><i class="fa-solid fa-times text-xl"></i></button>
                     </div>
                     <div class="grid grid-cols-2 gap-3 mb-2">
-                        <div class="bg-primaryDark p-4 rounded-xl border border-white/10">
-                            <p class="text-xs text-gray-400 uppercase font-bold tracking-wider mb-1">Volume Bruto</p>
-                            <p id="admin-gross" class="text-2xl font-black text-white">R$ 0,00</p>
+                        <div class="bg-primaryDark p-4 rounded-2xl border border-white/10">
+                            <p class="text-xs text-gray-300 uppercase font-extrabold tracking-wider mb-1">Volume Bruto</p>
+                            <p id="admin-gross" class="text-3xl font-black text-white">R$ 0,00</p>
                         </div>
-                        <div class="bg-primaryDark p-4 rounded-xl border border-accent/20">
-                            <p class="text-xs text-accent uppercase font-bold tracking-wider mb-1">Lucro (15%)</p>
-                            <p id="admin-net" class="text-2xl font-black text-accent">R$ 0,00</p>
+                        <div class="bg-primaryDark p-4 rounded-2xl border border-accent/40">
+                            <p class="text-xs text-accent uppercase font-extrabold tracking-wider mb-1">Lucro (15%)</p>
+                            <p id="admin-net" class="text-3xl font-black text-accent">R$ 0,00</p>
                         </div>
                     </div>
                 </div>
                 <div class="p-4 pb-24">
-                    <h3 class="font-bold text-primary mb-3"><i class="fa-solid fa-list text-gray-400 mr-1"></i> Pedidos ao Vivo</h3>
+                    <h3 class="text-lg font-extrabold text-primary mb-3"><i class="fa-solid fa-list text-primaryLight mr-1"></i> Pedidos ao Vivo</h3>
                     <div id="admin-orders-list" class="space-y-3 mb-6"></div>
 
-                    <h3 class="font-bold text-primary mb-3 border-t border-gray-200 pt-4"><i class="fa-solid fa-motorcycle text-gray-400 mr-1"></i> Motoristas</h3>
+                    <h3 class="text-lg font-extrabold text-primary mb-3 border-t border-gray-200 pt-4"><i class="fa-solid fa-motorcycle text-primaryLight mr-1"></i> Motoristas</h3>
                     <div id="admin-drivers-list" class="space-y-3 mb-6"></div>
 
-                    <h3 class="font-bold text-red-600 mb-3 border-t border-gray-200 pt-4"><i class="fa-solid fa-shield-virus mr-1"></i> Alertas de Segurança</h3>
+                    <h3 class="text-lg font-extrabold text-danger mb-3 border-t border-gray-200 pt-4"><i class="fa-solid fa-shield-virus mr-1"></i> Alertas de Segurança</h3>
                     <div id="admin-security-logs" class="space-y-2"></div>
                 </div>
             </main>
@@ -379,9 +400,9 @@
                         <i id="ai-icon" class="fa-solid fa-id-card"></i>
                     </div>
                 </div>
-                <h3 class="text-2xl font-bold text-white mb-2">Analisando...</h3>
+                <h3 class="text-3xl font-extrabold text-white mb-2">Analisando...</h3>
                 <div class="h-12">
-                    <p id="ai-status-text" class="text-accent font-medium text-sm transition-opacity duration-300">Conectando aos servidores seguros...</p>
+                    <p id="ai-status-text" class="text-accent font-bold text-base transition-opacity duration-300">Conectando aos servidores seguros...</p>
                 </div>
                 <div class="w-full bg-gray-800 rounded-full h-2 mt-4 overflow-hidden">
                     <div id="ai-progress-bar" class="bg-accent h-2 rounded-full w-0 transition-all duration-500 ease-out"></div>
@@ -392,7 +413,7 @@
         <!-- MODAL TRACKING (cliente acompanha) -->
         <div id="tracking-modal" class="absolute inset-0 bg-white z-50 hidden flex-col slide-up">
             <div class="p-4 bg-primary text-white flex justify-between items-center shadow-md z-10">
-                <h3 class="font-bold text-lg"><i class="fa-solid fa-motorcycle text-accent mr-2"></i> Rastreio de Pedido</h3>
+                <h3 class="font-extrabold text-xl"><i class="fa-solid fa-motorcycle text-accent mr-2"></i> Rastreio de Pedido</h3>
                 <button onclick="closeTrackingModal()" class="text-gray-300 hover:text-white"><i class="fa-solid fa-chevron-down text-xl"></i></button>
             </div>
             <div class="flex-1 bg-gray-100 relative flex items-center justify-center overflow-hidden border-b-4 border-accent">
@@ -401,7 +422,7 @@
                 <div class="z-10 bg-white w-14 h-14 rounded-full flex items-center justify-center shadow-2xl border-4 border-primary text-xl text-primary animate-bounce">
                     <i class="fa-solid fa-motorcycle"></i>
                 </div>
-                <div class="absolute bottom-4 bg-white/95 backdrop-blur px-4 py-2 rounded-full shadow-lg font-bold text-sm text-primary border border-gray-200">
+                <div class="absolute bottom-4 bg-white/95 backdrop-blur px-5 py-3 rounded-full shadow-lg font-extrabold text-base text-primary border border-gray-200">
                     <i id="tracking-status-icon" class="fa-solid fa-spinner fa-spin text-accent mr-2"></i> <span id="tracking-status-text">Aguardando aceitação</span>
                 </div>
             </div>
@@ -412,24 +433,24 @@
                             <i class="fa-solid fa-user-shield"></i>
                         </div>
                         <div>
-                            <p id="tracking-driver-name" class="font-bold text-primary">Aguardando motorista</p>
-                            <p class="text-xs text-gray-500 font-bold uppercase tracking-wide">Pedido <span id="tracking-order-id" class="text-accent">—</span></p>
+                            <p id="tracking-driver-name" class="font-extrabold text-primary text-lg">Aguardando motorista</p>
+                            <p class="text-sm text-gray-500 font-extrabold uppercase tracking-wide">Pedido <span id="tracking-order-id" class="text-accentDark">—</span></p>
                         </div>
                     </div>
                 </div>
                 <div class="space-y-4">
                     <div class="flex gap-3 items-center">
-                        <div class="w-3 h-3 rounded-full bg-primary ring-4 ring-blue-50"></div>
+                        <div class="w-4 h-4 rounded-full bg-primary ring-4 ring-blue-50"></div>
                         <div class="flex-1 border-b border-gray-100 pb-2">
-                            <p class="text-xs text-gray-400 font-bold uppercase">Origem</p>
-                            <p id="track-origem" class="text-sm font-bold text-gray-700 truncate">—</p>
+                            <p class="text-xs text-gray-500 font-extrabold uppercase tracking-wider">Origem</p>
+                            <p id="track-origem" class="text-base font-extrabold text-gray-800 truncate">—</p>
                         </div>
                     </div>
                     <div class="flex gap-3 items-center">
-                        <div class="w-3 h-3 rounded-full bg-accent ring-4 ring-yellow-50"></div>
+                        <div class="w-4 h-4 rounded-full bg-accent ring-4 ring-yellow-50"></div>
                         <div class="flex-1">
-                            <p class="text-xs text-gray-400 font-bold uppercase">Destino</p>
-                            <p id="track-destino" class="text-sm font-bold text-gray-700 truncate">—</p>
+                            <p class="text-xs text-gray-500 font-extrabold uppercase tracking-wider">Destino</p>
+                            <p id="track-destino" class="text-base font-extrabold text-gray-800 truncate">—</p>
                         </div>
                     </div>
                 </div>
@@ -438,23 +459,23 @@
 
         <!-- MODAL POD (Prova de Entrega) -->
         <div id="proof-delivery-modal" class="absolute inset-0 bg-primaryDark/98 z-[700] hidden flex flex-col p-6 overflow-y-auto">
-            <div class="bg-white rounded-2xl p-6 fade-in text-center shadow-2xl my-auto">
-                <i class="fa-solid fa-camera-retro text-accent text-5xl mb-2"></i>
-                <h3 class="text-2xl font-black text-primary mb-2">Prova de Entrega</h3>
-                <p class="text-gray-400 text-[10px] mb-6 uppercase font-bold tracking-widest">Foto e Assinatura são obrigatórios</p>
+            <div class="bg-white rounded-3xl p-6 fade-in text-center shadow-2xl my-auto">
+                <i class="fa-solid fa-camera-retro text-accent text-5xl mb-3"></i>
+                <h3 class="text-3xl font-black text-primary mb-2">Prova de Entrega</h3>
+                <p class="text-gray-500 text-sm mb-6 uppercase font-extrabold tracking-widest">Foto e Assinatura são obrigatórios</p>
                 <div class="space-y-6 text-left">
                     <div>
-                        <label class="text-[10px] font-black text-primary uppercase block mb-2">1. Foto do Local da Entrega</label>
-                        <input type="file" id="delivery-photo" accept="image/*" capture="environment" class="w-full text-xs font-bold" onchange="validatePOD()">
+                        <label class="text-sm font-extrabold text-primary uppercase tracking-wider block mb-2">1. Foto do Local da Entrega</label>
+                        <input type="file" id="delivery-photo" accept="image/*" capture="environment" class="w-full text-base font-bold" onchange="validatePOD()">
                     </div>
                     <div>
-                        <label class="text-[10px] font-black text-primary uppercase block mb-2">2. Assinatura do Cliente</label>
-                        <canvas id="signature-pad" width="300" height="150" class="w-full border border-gray-200 rounded-lg shadow-inner bg-gray-50"></canvas>
-                        <button type="button" onclick="clearSignature()" class="text-[9px] text-danger font-black mt-2 uppercase tracking-widest"><i class="fa-solid fa-eraser"></i> Limpar</button>
+                        <label class="text-sm font-extrabold text-primary uppercase tracking-wider block mb-2">2. Assinatura do Cliente</label>
+                        <canvas id="signature-pad" width="300" height="150" class="w-full border-2 border-gray-200 rounded-xl shadow-inner bg-gray-50"></canvas>
+                        <button type="button" onclick="clearSignature()" class="text-sm text-danger font-extrabold mt-2 uppercase tracking-wider"><i class="fa-solid fa-eraser"></i> Limpar</button>
                     </div>
                 </div>
-                <button id="btn-confirm-pod" disabled onclick="confirmDeliveryWithPOD()" class="w-full bg-success text-white font-black py-4 rounded-2xl shadow-xl mt-6 opacity-50 tracking-widest uppercase">FINALIZAR E RECEBER</button>
-                <button onclick="closePOD()" class="w-full py-3 text-gray-400 font-bold uppercase text-[10px] mt-2">Voltar</button>
+                <button id="btn-confirm-pod" disabled onclick="confirmDeliveryWithPOD()" class="btn-success w-full mt-6 opacity-50 tracking-widest uppercase text-lg">FINALIZAR E RECEBER</button>
+                <button onclick="closePOD()" class="w-full py-3 text-gray-500 font-extrabold uppercase text-sm mt-2">Voltar</button>
             </div>
         </div>
 
@@ -462,41 +483,41 @@
         <div id="checkout-modal" class="absolute inset-0 bg-primaryDark/95 z-[600] hidden flex flex-col justify-end p-6">
             <div class="bg-white rounded-3xl p-6 slide-up text-center">
                 <i class="fa-brands fa-pix text-teal-500 text-6xl mb-3"></i>
-                <h2 class="text-2xl font-black text-primary tracking-tighter">Pagar Entrega</h2>
+                <h2 class="text-3xl font-black text-primary tracking-tight">Pagar Entrega</h2>
                 <div class="bg-gray-100 rounded-2xl p-5 my-5">
-                    <p class="text-xs text-gray-400 uppercase font-black mb-1">Total via PIX</p>
-                    <p id="checkout-price" class="text-4xl font-black text-primary">R$ 0,00</p>
+                    <p class="text-sm text-gray-600 uppercase font-extrabold tracking-wider mb-1">Total via PIX</p>
+                    <p id="checkout-price" class="text-5xl font-black text-primary">R$ 0,00</p>
                 </div>
-                <div class="bg-primary p-4 rounded-2xl mb-5 flex justify-between border border-accent/20 shadow-inner">
-                    <input type="text" id="checkout-pix-key" readonly value="" class="bg-transparent text-accent font-bold w-full text-center outline-none text-sm">
-                    <button onclick="copyPixKey()" class="text-white ml-2"><i class="fa-solid fa-copy"></i></button>
+                <div class="card-primary-gradient p-4 mb-5 flex justify-between items-center">
+                    <input type="text" id="checkout-pix-key" readonly value="" class="bg-transparent text-accent font-extrabold w-full text-center outline-none text-base">
+                    <button onclick="copyPixKey()" class="text-white ml-2 p-2" aria-label="Copiar"><i class="fa-solid fa-copy text-xl"></i></button>
                 </div>
-                <p class="text-[10px] text-gray-400 font-bold uppercase mb-4">Após pagar, o admin confirma manualmente e libera a corrida.</p>
-                <button onclick="confirmPayment()" class="w-full bg-primary text-accent font-black py-4 rounded-2xl uppercase tracking-widest transform transition active:scale-95 shadow-xl">JÁ PAGUEI</button>
-                <button onclick="closeCheckout()" class="text-gray-400 font-bold uppercase text-[10px] mt-3">Cancelar</button>
+                <p class="text-sm text-gray-600 font-bold mb-4">Após pagar, o admin confirma manualmente e libera a corrida.</p>
+                <button onclick="confirmPayment()" class="btn-accent w-full uppercase tracking-widest text-lg">JÁ PAGUEI</button>
+                <button onclick="closeCheckout()" class="text-gray-500 font-extrabold uppercase text-sm mt-3">Cancelar</button>
             </div>
         </div>
 
         <!-- TOAST -->
-        <div id="toast-notification" class="fixed top-5 left-1/2 transform -translate-x-1/2 bg-primaryDark text-white px-5 py-3 rounded-xl shadow-2xl z-[800] transition-all duration-300 opacity-0 pointer-events-none translate-y-[-20px] flex items-center gap-3 max-w-[90%] border border-white/10">
-            <i class="fa-solid fa-bell text-accent text-lg"></i>
-            <span id="toast-message" class="text-sm font-medium text-white"></span>
+        <div id="toast-notification" class="fixed top-5 left-1/2 transform -translate-x-1/2 bg-primaryDark text-white px-5 py-3 rounded-2xl shadow-2xl z-[800] transition-all duration-300 opacity-0 pointer-events-none translate-y-[-20px] flex items-center gap-3 max-w-[90%] border border-white/10">
+            <i class="fa-solid fa-bell text-accent text-xl"></i>
+            <span id="toast-message" class="text-base font-bold text-white"></span>
         </div>
 
         <!-- BOTTOM NAV -->
-        <nav id="bottom-nav" class="bg-white border-t border-gray-200 p-2 flex justify-around absolute bottom-0 w-full z-30 shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.05)] pb-4 pt-3">
-            <button id="nav-inicio" class="flex flex-col items-center text-primary transition" onclick="switchView('inicio')">
-                <i class="fa-solid fa-house text-xl mb-1"></i>
-                <span class="text-[10px] font-bold">Início</span>
+        <nav id="bottom-nav" class="bg-white border-t border-gray-200 px-2 flex justify-around absolute bottom-0 w-full z-30 shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.08)] pb-3 pt-2">
+            <button id="nav-inicio" class="flex flex-col items-center justify-center flex-1 active" onclick="switchView('inicio')">
+                <i class="fa-solid fa-house text-2xl mb-1"></i>
+                <span class="text-xs font-extrabold">Início</span>
             </button>
-            <button id="nav-atividade" class="flex flex-col items-center text-gray-400 hover:text-primary transition relative" onclick="switchView('atividade')">
-                <i class="fa-solid fa-receipt text-xl mb-1"></i>
-                <span id="badge-atividade" class="absolute top-0 right-2 bg-accent border-2 border-white w-3 h-3 rounded-full hidden"></span>
-                <span class="text-[10px] font-bold">Atividade</span>
+            <button id="nav-atividade" class="flex flex-col items-center justify-center flex-1 relative" onclick="switchView('atividade')">
+                <i class="fa-solid fa-receipt text-2xl mb-1"></i>
+                <span id="badge-atividade" class="absolute top-2 right-1/4 bg-danger border-2 border-white w-3 h-3 rounded-full hidden"></span>
+                <span class="text-xs font-extrabold">Atividade</span>
             </button>
-            <button id="nav-perfil" class="flex flex-col items-center text-gray-400 hover:text-primary transition" onclick="switchView('perfil')">
-                <i class="fa-solid fa-user-circle text-xl mb-1"></i>
-                <span class="text-[10px] font-bold">Perfil</span>
+            <button id="nav-perfil" class="flex flex-col items-center justify-center flex-1" onclick="switchView('perfil')">
+                <i class="fa-solid fa-user-circle text-2xl mb-1"></i>
+                <span class="text-xs font-extrabold">Perfil</span>
             </button>
         </nav>
     </div>

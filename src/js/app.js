@@ -112,6 +112,7 @@ function applyDriverProfile() {
   const overlay = document.getElementById("account-blocked-overlay");
   const blockMessage = document.getElementById("block-message");
   const walletBtn = document.getElementById("driver-wallet-btn");
+  const ctaDriver = document.getElementById("cta-driver-banner");
   const displayName = document.getElementById("profile-display-name");
   const statusLabel = document.getElementById("profile-status");
   const balanceLabel = document.getElementById("profile-wallet-balance");
@@ -119,10 +120,12 @@ function applyDriverProfile() {
   if (!driverProfile) {
     overlay?.classList.add("hidden");
     walletBtn?.classList.add("hidden");
+    ctaDriver?.classList.remove("hidden");
     if (displayName) displayName.innerText = currentUser?.email?.split("@")[0] || "Cliente";
     if (statusLabel) statusLabel.innerHTML = `Status: Cliente <i class="fa-solid fa-circle-check"></i>`;
     return;
   }
+  ctaDriver?.classList.add("hidden");
 
   if (displayName) displayName.innerText = driverProfile.name || "Motorista";
   if (statusLabel) {
@@ -171,7 +174,7 @@ function renderCustomerActivity() {
   if (!el || !currentUser) return;
   const mine = orders.filter((o) => o.customerId === currentUser.uid);
   if (mine.length === 0) {
-    el.innerHTML = `<p class="text-center py-12 text-xs font-bold text-gray-300 uppercase">Sem corridas ainda</p>`;
+    el.innerHTML = `<p class="text-center py-12 text-base font-bold text-gray-400 uppercase"><i class="fa-solid fa-receipt text-3xl block mb-3 text-gray-300"></i>Sem corridas ainda</p>`;
     return;
   }
   el.innerHTML = mine.map(renderCustomerOrderCard).join("");
@@ -188,19 +191,19 @@ function renderCustomerOrderCard(o) {
   }[o.status] || { label: o.status, color: "bg-gray-100 text-gray-700", icon: "fa-circle" };
   const trackable = ["pending", "accepted", "in_transit"].includes(o.status);
   return `
-    <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-      <div class="flex justify-between items-start mb-2">
+    <div class="card-elevated">
+      <div class="flex justify-between items-start mb-3">
         <div>
-          <p class="text-xs font-bold text-gray-400 uppercase">Pedido #${o.id.slice(-4).toUpperCase()}</p>
-          <p class="font-bold text-primary text-sm mt-0.5"><i class="fa-solid fa-truck-ramp-box text-accent text-xs mr-1"></i> ${o.itemType || "Item"} · ${o.veh}</p>
+          <p class="text-xs font-extrabold text-gray-500 uppercase tracking-wider">Pedido #${o.id.slice(-4).toUpperCase()}</p>
+          <p class="font-extrabold text-primary text-base mt-1"><i class="fa-solid fa-truck-ramp-box text-accentDark text-base mr-1"></i> ${o.itemType || "Item"} · ${o.veh}</p>
         </div>
-        <p class="font-black text-primary">R$ ${Number(o.price).toFixed(2).replace(".", ",")}</p>
+        <p class="font-black text-primary text-xl">R$ ${Number(o.price).toFixed(2).replace(".", ",")}</p>
       </div>
-      <span class="inline-flex items-center gap-1 ${statusInfo.color} text-[10px] font-bold px-2 py-1 rounded-full uppercase">
+      <span class="status-pill ${statusInfo.color}">
         <i class="fa-solid ${statusInfo.icon}"></i> ${statusInfo.label}
       </span>
-      ${o.driverName ? `<p class="text-[11px] text-gray-500 mt-2"><i class="fa-solid fa-user-shield text-accent"></i> Motorista: <strong>${o.driverName}</strong></p>` : ""}
-      ${trackable ? `<button onclick="window.openTrackingFor('${o.id}')" class="mt-3 w-full bg-primary text-accent font-bold py-2 rounded-lg text-xs uppercase tracking-wider hover:bg-primaryDark transition"><i class="fa-solid fa-satellite-dish mr-1"></i> Rastrear</button>` : ""}
+      ${o.driverName ? `<p class="text-sm font-bold text-gray-600 mt-3"><i class="fa-solid fa-user-shield text-accentDark"></i> Motorista: <strong>${o.driverName}</strong></p>` : ""}
+      ${trackable ? `<button onclick="window.openTrackingFor('${o.id}')" class="btn-primary mt-3 w-full text-base"><i class="fa-solid fa-satellite-dish mr-1"></i> Rastrear pedido</button>` : ""}
     </div>`;
 }
 
@@ -217,7 +220,7 @@ function renderDriverMural() {
   let available = orders.filter((o) => o.status === "pending");
   if (driverFilter !== "Todos") available = available.filter((o) => o.veh === driverFilter);
   if (available.length === 0) {
-    el.innerHTML = `<p class="text-center py-12 text-xs font-bold text-gray-300 uppercase">Procurando corridas...</p>`;
+    el.innerHTML = `<p class="text-center py-12 text-base font-bold text-gray-400 uppercase"><i class="fa-solid fa-magnifying-glass text-3xl block mb-3 text-gray-300"></i>Procurando corridas...</p>`;
     return;
   }
   el.innerHTML = available.map(renderAvailableOrderCard).join("");
@@ -231,20 +234,19 @@ function renderAvailableOrderCard(o) {
     Caixas: "fa-box-open"
   }[o.itemType] || "fa-cube";
   return `
-    <div class="bg-primary text-white p-5 rounded-2xl shadow-xl border border-white/5">
+    <div class="card-primary-gradient p-5">
       <div class="flex justify-between items-start mb-3">
-        <span class="bg-accent text-primary text-[10px] font-black px-3 py-1 rounded-full uppercase flex items-center gap-1">
+        <span class="bg-accent text-primary text-xs font-black px-3 py-1.5 rounded-full uppercase flex items-center gap-1">
           <i class="fa-solid ${itemIcon}"></i> ${o.itemType || "Item"} · ${o.veh}
         </span>
-        <p class="text-2xl font-black text-accent">R$ ${earning}</p>
+        <p class="text-3xl font-black text-accent">R$ ${earning}</p>
       </div>
-      <div class="text-xs space-y-1.5 mb-4">
-        <p><i class="fa-solid fa-location-dot text-accent w-4"></i> ${o.origin || "—"}</p>
-        <p><i class="fa-solid fa-flag-checkered text-accent w-4"></i> ${o.destination || "—"}</p>
+      <div class="text-sm font-bold space-y-2 mb-4">
+        <p><i class="fa-solid fa-location-dot text-accent w-5"></i> ${o.origin || "—"}</p>
+        <p><i class="fa-solid fa-flag-checkered text-accent w-5"></i> ${o.destination || "—"}</p>
       </div>
-      <button onclick="window.acceptOrderFromUI('${o.id}')"
-        class="w-full bg-accent text-primary font-black py-3 rounded-xl uppercase shadow-lg tracking-widest text-sm">
-        <i class="fa-solid fa-bolt"></i> Aceitar Entrega
+      <button onclick="window.acceptOrderFromUI('${o.id}')" class="btn-accent w-full uppercase tracking-widest text-base">
+        <i class="fa-solid fa-bolt"></i> ACEITAR ENTREGA
       </button>
     </div>`;
 }
@@ -253,18 +255,18 @@ function renderActiveDelivery(o) {
   const earning = (o.price * DRIVER_SHARE).toFixed(2).replace(".", ",");
   const isInTransit = o.status === "in_transit";
   return `
-    <div class="bg-primary text-white p-5 rounded-2xl shadow-xl border border-accent/20">
-      <p class="text-[10px] font-black text-accent uppercase tracking-widest mb-2">
+    <div class="card-primary-gradient p-5">
+      <p class="text-xs font-black text-accent uppercase tracking-widest mb-3">
         <i class="fa-solid fa-circle-dot fa-beat-fade"></i> Entrega em andamento — R$ ${earning}
       </p>
-      <div class="text-xs space-y-2 mb-4">
-        <p><i class="fa-solid fa-location-dot text-accent w-4"></i> ${o.origin || "—"}</p>
-        <p><i class="fa-solid fa-flag-checkered text-accent w-4"></i> ${o.destination || "—"}</p>
+      <div class="text-sm font-bold space-y-2 mb-4">
+        <p><i class="fa-solid fa-location-dot text-accent w-5"></i> ${o.origin || "—"}</p>
+        <p><i class="fa-solid fa-flag-checkered text-accent w-5"></i> ${o.destination || "—"}</p>
       </div>
       ${
         isInTransit
-          ? `<button onclick="window.openPODFromUI('${o.id}')" class="w-full bg-success text-white font-black py-3 rounded-xl uppercase shadow-lg tracking-widest text-sm"><i class="fa-solid fa-camera"></i> Finalizar (POD)</button>`
-          : `<button onclick="window.markPickedUp('${o.id}')" class="w-full bg-accent text-primary font-black py-3 rounded-xl uppercase shadow-lg tracking-widest text-sm"><i class="fa-solid fa-box"></i> Pacote Coletado</button>`
+          ? `<button onclick="window.openPODFromUI('${o.id}')" class="btn-success w-full uppercase tracking-widest text-base"><i class="fa-solid fa-camera"></i> FINALIZAR (POD)</button>`
+          : `<button onclick="window.markPickedUp('${o.id}')" class="btn-accent w-full uppercase tracking-widest text-base"><i class="fa-solid fa-box"></i> PACOTE COLETADO</button>`
       }
     </div>`;
 }
@@ -282,7 +284,7 @@ function renderAdminPanel() {
   if (netEl) netEl.innerText = `R$ ${net.toFixed(2).replace(".", ",")}`;
 
   el.innerHTML = orders.map(renderAdminOrderCard).join("") ||
-    `<p class="text-center py-8 text-xs font-bold text-gray-300 uppercase">Sem pedidos</p>`;
+    `<p class="text-center py-8 text-base font-bold text-gray-400 uppercase">Sem pedidos</p>`;
 }
 
 function renderAdminOrderCard(o) {
@@ -296,13 +298,13 @@ function renderAdminOrderCard(o) {
   }[o.status] || "bg-gray-100 text-gray-800";
   const action =
     o.status === "waiting_confirmation"
-      ? `<button onclick="window.adminConfirm('${o.id}')" class="bg-success text-white px-3 py-1.5 rounded-lg text-[10px] font-black shadow-md uppercase">Confirmar PIX</button>`
-      : `<span class="text-primary font-black">R$ ${Number(o.price).toFixed(2).replace(".", ",")}</span>`;
+      ? `<button onclick="window.adminConfirm('${o.id}')" class="btn-success px-4 py-2 text-xs uppercase" style="min-height:auto">Confirmar PIX</button>`
+      : `<span class="text-primary font-black text-lg">R$ ${Number(o.price).toFixed(2).replace(".", ",")}</span>`;
   return `
-    <div class="bg-white p-3 rounded-xl border border-gray-100 flex justify-between items-center">
+    <div class="card-elevated flex justify-between items-center">
       <div>
-        <p class="font-black text-primary text-xs">#${o.id.slice(-4).toUpperCase()} · ${o.itemType || "Item"} · ${o.veh}</p>
-        <span class="inline-block mt-1 text-[9px] font-black px-2 py-0.5 rounded-full uppercase ${tag}">${o.status}</span>
+        <p class="font-black text-primary text-base">#${o.id.slice(-4).toUpperCase()} · ${o.itemType || "Item"} · ${o.veh}</p>
+        <span class="inline-block mt-1 text-tiny font-black px-2 py-1 rounded-full uppercase ${tag}">${o.status}</span>
       </div>
       ${action}
     </div>`;
@@ -312,16 +314,16 @@ function renderSecurityLogs() {
   const el = document.getElementById("admin-security-logs");
   if (!el) return;
   if (securityLogs.length === 0) {
-    el.innerHTML = `<p class="text-[10px] text-gray-300 uppercase font-bold">Nenhum alerta nas últimas 24h</p>`;
+    el.innerHTML = `<p class="text-sm text-gray-400 uppercase font-bold py-2">Nenhum alerta nas últimas 24h</p>`;
     return;
   }
   el.innerHTML = securityLogs.map((log) => {
     const when = new Date(log.createdAt || Date.now()).toLocaleString("pt-BR");
     return `
-      <div class="bg-red-50 border border-red-200 rounded-lg p-3 text-xs">
-        <p class="text-red-700 font-bold uppercase tracking-wider text-[10px]"><i class="fa-solid fa-triangle-exclamation"></i> ${log.type || "alerta"}</p>
-        <p class="text-gray-700 mt-1">${log.reason || ""} ${log.cpfMasked ? `· CPF ${log.cpfMasked}` : ""}</p>
-        <p class="text-[10px] text-gray-400 mt-1">${when}</p>
+      <div class="bg-red-50 border-2 border-red-200 rounded-2xl p-3">
+        <p class="text-danger font-extrabold uppercase tracking-wider text-xs"><i class="fa-solid fa-triangle-exclamation"></i> ${log.type || "alerta"}</p>
+        <p class="text-gray-700 mt-1 text-sm font-semibold">${log.reason || ""} ${log.cpfMasked ? `· CPF ${log.cpfMasked}` : ""}</p>
+        <p class="text-tiny text-gray-500 mt-1 font-semibold">${when}</p>
       </div>`;
   }).join("");
 }
