@@ -261,6 +261,26 @@
                     </button>
 
                     <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
+                        <h3 class="text-sm font-extrabold text-gray-500 mb-4 uppercase tracking-wider">Preferências</h3>
+                        <div class="flex justify-between items-center -mx-2 px-2 py-3">
+                            <span class="flex items-center gap-3 text-primary text-base font-bold">
+                                <i class="fa-solid fa-moon text-primary text-xl w-6"></i>
+                                <span class="theme-toggle-label">Modo escuro</span>
+                            </span>
+                            <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Alternar modo escuro" aria-pressed="false" onclick="toggleTheme()">
+                                <span class="theme-toggle-thumb"></span>
+                            </button>
+                        </div>
+                        <div class="border-t border-gray-100 -mx-2 px-2 py-3 flex justify-between items-center cursor-pointer" onclick="testNewOrderSound()">
+                            <span class="flex items-center gap-3 text-primary text-base font-bold">
+                                <i class="fa-solid fa-volume-high text-primary text-xl w-6"></i>
+                                Testar som de novo pedido
+                            </span>
+                            <i class="fa-solid fa-play text-accent text-lg"></i>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
                         <h3 class="text-sm font-extrabold text-gray-500 mb-4 uppercase tracking-wider">Conta</h3>
                         <ul class="space-y-1">
                             <li class="flex justify-between items-center text-primary text-base font-bold cursor-pointer hover:bg-gray-50 -mx-2 px-2 py-3 rounded-xl" onclick="openWhatsAppSupport()"><span class="flex items-center gap-3"><i class="fa-brands fa-whatsapp text-success text-xl w-6"></i> Ajuda &amp; Suporte</span> <i class="fa-solid fa-chevron-right text-gray-300"></i></li>
@@ -270,7 +290,7 @@
                     <button onclick="signOutUser()" class="w-full bg-red-50 text-danger font-extrabold py-4 rounded-2xl shadow-sm border-2 border-red-200 hover:bg-red-100 transition text-base">
                         <i class="fa-solid fa-right-from-bracket mr-2"></i> Sair da Conta
                     </button>
-                    <p class="text-center text-xs text-gray-400 mt-2 font-semibold">NaMão Delivery v1.3 Premium</p>
+                    <p class="text-center text-xs text-gray-400 mt-2 font-semibold">NaMão Delivery v1.4 Premium</p>
                 </div>
             </main>
 
@@ -457,7 +477,25 @@
             </div>
         </div>
 
-        <!-- MODAL POD (Prova de Entrega) -->
+        <!-- MODAL Pickup Photo (foto da retirada — POD "antes") -->
+        <div id="pickup-photo-modal" class="absolute inset-0 bg-primaryDark/98 z-[700] hidden flex flex-col p-6 overflow-y-auto">
+            <div class="bg-white rounded-3xl p-6 fade-in text-center shadow-2xl my-auto">
+                <i class="fa-solid fa-bag-shopping text-accent text-5xl mb-3"></i>
+                <h3 class="text-3xl font-black text-primary mb-2">Confirmar Coleta</h3>
+                <p class="text-gray-500 text-sm mb-6 uppercase font-extrabold tracking-widest">Foto do produto retirado é obrigatória</p>
+                <div class="space-y-6 text-left">
+                    <div>
+                        <label class="text-sm font-extrabold text-primary uppercase tracking-wider block mb-2">Foto da retirada</label>
+                        <input type="file" id="pickup-photo" accept="image/*" capture="environment" class="w-full text-base font-bold" onchange="validatePickupPhoto()">
+                        <p class="text-xs text-gray-500 mt-2">Tira foto do pacote ou comida na hora da retirada — vira prova de que saiu certo do estabelecimento.</p>
+                    </div>
+                </div>
+                <button id="btn-confirm-pickup" disabled onclick="confirmPickupWithPhoto()" class="btn-accent w-full mt-6 opacity-50 tracking-widest uppercase text-lg">CONFIRMAR COLETA</button>
+                <button onclick="closePickupPhoto()" class="w-full py-3 text-gray-500 font-extrabold uppercase text-sm mt-2">Voltar</button>
+            </div>
+        </div>
+
+        <!-- MODAL POD (Prova de Entrega — foto "depois" + assinatura) -->
         <div id="proof-delivery-modal" class="absolute inset-0 bg-primaryDark/98 z-[700] hidden flex flex-col p-6 overflow-y-auto">
             <div class="bg-white rounded-3xl p-6 fade-in text-center shadow-2xl my-auto">
                 <i class="fa-solid fa-camera-retro text-accent text-5xl mb-3"></i>

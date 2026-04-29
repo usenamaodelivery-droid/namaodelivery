@@ -1,6 +1,12 @@
 // Entrypoint da app
 import { auth, onAuth, handleAuth, signOutUser } from "./auth.js";
 import { showToast, switchView, switchMainTab, hideSplash, updateFileLabel } from "./ui.js";
+import { initTheme, toggleTheme } from "./theme.js";
+import {
+  processOrderUpdate as processNewOrderAlert,
+  requestNotificationPermission,
+  testNewOrderSound,
+} from "./notifications.js";
 import {
   subscribeOrders,
   createOrder,
@@ -57,6 +63,7 @@ let unsubSecurity = null;
 
 // --- Splash on load (some delay para deixar o efeito) ---
 window.addEventListener("DOMContentLoaded", () => {
+  initTheme();
   setTimeout(() => hideSplash(), 1200);
 });
 
@@ -81,9 +88,18 @@ onAuth(async (user) => {
     applyDriverProfile();
   });
 
+  // Pede permissão de notificação assim que o motorista loga (no-op em
+  // dispositivos sem suporte ou já concedido).
+  requestNotificationPermission();
+
   // Listener de pedidos
   unsubOrders = subscribeOrders((list) => {
     orders = list;
+    // Dispara som + vibração + notificação para cada pedido novo 'pending'.
+    // Fica em silêncio na primeira leitura (histórico).
+    try { processNewOrderAlert(list); } catch (err) {
+      console.warn("[notifications] failed to process update:", err);
+    }
     renderAll();
     syncTracking();
   });
@@ -266,7 +282,7 @@ function renderActiveDelivery(o) {
       ${
         isInTransit
           ? `<button onclick="window.openPODFromUI('${o.id}')" class="btn-success w-full uppercase tracking-widest text-base"><i class="fa-solid fa-camera"></i> FINALIZAR (POD)</button>`
-          : `<button onclick="window.markPickedUp('${o.id}')" class="btn-accent w-full uppercase tracking-widest text-base"><i class="fa-solid fa-box"></i> PACOTE COLETADO</button>`
+          : `<button onclick="window.openPickupPhoto('${o.id}')" class="btn-accent w-full uppercase tracking-widest text-base"><i class="fa-solid fa-camera"></i> CONFIRMAR COLETA (FOTO)</button>`
       }
     </div>`;
 }

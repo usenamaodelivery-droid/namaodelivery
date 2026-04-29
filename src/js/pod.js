@@ -7,7 +7,7 @@
 import { ref, uploadString, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 import { storage } from "./firebaseInit.js";
 import { APP_ID } from "./firebaseConfig.js";
-import { completeOrder } from "./orders.js";
+import { completeOrder, markInTransit } from "./orders.js";
 import { showToast } from "./ui.js";
 
 // Switch para futuro: setar como true depois de habilitar Blaze + Storage.
@@ -120,6 +120,73 @@ async function compressImage(file, maxDim = 800, quality = 0.6) {
   }
   return dataUrl;
 }
+
+/* ---------------- PICKUP photo (foto antes — coleta no estabelecimento) ---------------- */
+
+let currentPickupOrderId = null;
+
+export function openPickupPhoto(orderId) {
+  currentPickupOrderId = orderId;
+  const photoInput = document.getElementById("pickup-photo");
+  if (photoInput) photoInput.value = "";
+  validatePickupPhoto();
+  document.getElementById("pickup-photo-modal")?.classList.remove("hidden");
+}
+
+export function closePickupPhoto() {
+  document.getElementById("pickup-photo-modal")?.classList.add("hidden");
+}
+
+export function validatePickupPhoto() {
+  const photo = document.getElementById("pickup-photo")?.files?.length > 0;
+  const btn = document.getElementById("btn-confirm-pickup");
+  if (!btn) return;
+  btn.disabled = !photo;
+  btn.classList.toggle("opacity-50", !photo);
+}
+
+export async function confirmPickupWithPhoto() {
+  const photoInput = document.getElementById("pickup-photo");
+  if (!photoInput?.files?.[0]) { showToast("Tira a foto da retirada"); return; }
+  if (!currentPickupOrderId) { showToast("Pedido indefinido"); return; }
+
+  const btn = document.getElementById("btn-confirm-pickup");
+  btn.disabled = true;
+  btn.innerText = "ENVIANDO...";
+
+  try {
+    let pickupPhotoUrl;
+    const file = photoInput.files[0];
+
+    if (STORAGE_MODE) {
+      const path = `artifacts/${APP_ID}/pickup/${currentPickupOrderId}/photo-${Date.now()}.jpg`;
+      const r = ref(storage, path);
+      await uploadBytes(r, file, { contentType: file.type || "image/jpeg" });
+      pickupPhotoUrl = await getDownloadURL(r);
+    } else {
+      pickupPhotoUrl = await compressImage(file, 800, 0.6);
+    }
+
+    await markInTransit(currentPickupOrderId, pickupPhotoUrl);
+    closePickupPhoto();
+    showToast("Coleta confirmada — siga para o destino");
+  } catch (err) {
+    console.error(err);
+    showToast(err?.message || "Falha ao confirmar coleta");
+  } finally {
+    btn.disabled = false;
+    btn.innerText = "CONFIRMAR COLETA";
+  }
+}
+
+if (typeof window !== "undefined") {
+  window.openPickupPhoto = openPickupPhoto;
+  window.closePickupPhoto = closePickupPhoto;
+  window.validatePickupPhoto = validatePickupPhoto;
+  window.confirmPickupWithPhoto = confirmPickupWithPhoto;
+}
+
+/* ---------------- DELIVERY POD (foto depois + assinatura) ---------------- */
 
 export async function confirmDeliveryWithPOD(driverId) {
   const photoInput = document.getElementById("delivery-photo");

@@ -204,3 +204,140 @@ input, select, textarea {
   border-radius: 16px;
   font-weight: 600;
 }
+
+/* =====================================================================
+ *  DARK MODE
+ *  Ativa via body.dark-mode (gerenciado por src/js/theme.js).
+ *  Sobrescreve apenas o necessário pra preservar a identidade NaMão
+ *  (azul navy + dourado) em fundo escuro.
+ * ===================================================================== */
+body.dark-mode {
+  background-color: #0B1426;
+  color: #E5E7EB;
+}
+
+/* Backgrounds de tela / cards */
+body.dark-mode .bg-white,
+body.dark-mode .bg-gray-50,
+body.dark-mode .bg-gray-100 {
+  background-color: #142036 !important;
+}
+body.dark-mode .bg-gray-200,
+body.dark-mode .bg-gray-300 {
+  background-color: #1B304F !important;
+}
+
+/* Textos */
+body.dark-mode .text-gray-900,
+body.dark-mode .text-black {
+  color: #F3F4F6 !important;
+}
+body.dark-mode .text-gray-700,
+body.dark-mode .text-gray-800 {
+  color: #E5E7EB !important;
+}
+body.dark-mode .text-gray-500,
+body.dark-mode .text-gray-600 {
+  color: #9CA3AF !important;
+}
+body.dark-mode .text-gray-400,
+body.dark-mode .text-gray-300 {
+  color: #6B7280 !important;
+}
+body.dark-mode .text-primary {
+  color: #F5DC8A !important;
+}
+
+/* Bordas */
+body.dark-mode .border-gray-100,
+body.dark-mode .border-gray-200,
+body.dark-mode .border-gray-300 {
+  border-color: rgba(245, 220, 138, 0.2) !important;
+}
+
+/* Inputs */
+body.dark-mode .input-field,
+body.dark-mode input,
+body.dark-mode select,
+body.dark-mode textarea {
+  background: #1B304F;
+  color: #F3F4F6;
+  border-color: rgba(245, 220, 138, 0.15);
+}
+body.dark-mode input::placeholder,
+body.dark-mode textarea::placeholder {
+  color: #6B7280;
+}
+body.dark-mode .input-field:focus {
+  background: #142036;
+  border-color: #E8B93A;
+}
+
+/* Tabs ativas */
+body.dark-mode .tab-active {
+  border-bottom-color: #E8B93A;
+  color: #F5DC8A;
+}
+
+/* Toast (escuro fica navy mesmo) */
+body.dark-mode #toast-notification {
+  background: #142036;
+  color: #F3F4F6;
+  border: 1px solid rgba(245, 220, 138, 0.2);
+}
+
+/* Sombras um tom mais escuras */
+body.dark-mode .shadow-sm { box-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+body.dark-mode .shadow-md { box-shadow: 0 4px 8px rgba(0,0,0,0.45); }
+body.dark-mode .shadow-lg { box-shadow: 0 8px 24px rgba(0,0,0,0.55); }
+
+/* Cards de pedido / banner — preserva o gradient navy original */
+body.dark-mode .card-primary-gradient {
+  background: linear-gradient(135deg, #1B304F 0%, #0F1F3A 100%);
+}
+
+/* Mapa Leaflet em dark — escurece tiles via filter */
+body.dark-mode .leaflet-tile-pane {
+  filter: brightness(0.6) invert(1) contrast(0.9) hue-rotate(200deg) saturate(0.4) brightness(0.9);
+}
+body.dark-mode .leaflet-control-attribution,
+body.dark-mode .leaflet-popup-content-wrapper {
+  background: #142036;
+  color: #E5E7EB;
+}
+
+/* Toggle switch (configurações) */
+.theme-toggle {
+  position: relative;
+  width: 52px;
+  height: 28px;
+  border-radius: 999px;
+  background: #d1d5db;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+.theme-toggle .theme-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s ease, background 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.25);
+}
+.theme-toggle .theme-toggle-thumb.on {
+  transform: translateX(24px);
+  background: #E8B93A;
+}
+body.dark-mode .theme-toggle {
+  background: #1B304F;
+}
+
+/* Splash em dark fica navy puro */
+body.dark-mode #splash-screen {
+  background: #0B1426 !important;
+}

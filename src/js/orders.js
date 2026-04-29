@@ -78,12 +78,21 @@ export async function updateDriverLocation(orderId, lat, lng) {
   });
 }
 
-/** Marca pedido como in_transit (motorista coletou). */
-export async function markInTransit(orderId) {
-  await updateDoc(doc(ordersCol(), orderId), {
+/**
+ * Marca pedido como in_transit (motorista coletou).
+ *
+ * @param {string} orderId
+ * @param {string} [pickupPhotoUrl] data URL ou URL do Storage com a foto
+ *   da retirada (POD "antes"). Opcional pra retro-compat, mas a UI atual
+ *   sempre passa.
+ */
+export async function markInTransit(orderId, pickupPhotoUrl) {
+  const update = {
     status: "in_transit",
-    pickupAt: Date.now()
-  });
+    pickupAt: Date.now(),
+  };
+  if (pickupPhotoUrl) update.pickupPhotoUrl = pickupPhotoUrl;
+  await updateDoc(doc(ordersCol(), orderId), update);
 }
 
 /**
