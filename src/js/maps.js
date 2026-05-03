@@ -1,41 +1,99 @@
 /* global L */
-// Leaflet é carregado via tag <script> no index.html.
+// Mapa do entregador. App não tem mais lado cliente — só motorista.
+//
+// Recursos:
+// - Tile bonito (CartoDB Voyager — colorido mas limpo)
+// - Marker do motorista (motoboy estilizado em SVG)
+// - Markers de origem/destino quando há corrida ativa
+// - Linha de rota navy/dourado entre os pontos
+// - Auto-fit pra mostrar trajeto inteiro
 
-let mapClient, mapDriver;
-let originMarker = null, destMarker = null, routeLine = null;
-export let startCoords = [-23.55, -46.63]; // São Paulo como fallback
+let mapDriver = null;
+let driverMarker = null;
+let originMarker = null;
+let destMarker = null;
+let routeLine = null;
+let lastUserCoords = null;
+
+export let startCoords = [-23.55, -46.63]; // SP fallback (até GPS pegar)
 export let destCoords = null;
 
-export function initClientMap(onDestinationSelected) {
-  const el = document.getElementById("map-cliente");
-  if (!el || mapClient) return;
+// SVG icons custom (motoboy + pin origem + pin destino)
+const driverIcon = () => L.divIcon({
+  className: "namao-driver-icon",
+  iconSize: [44, 44],
+  iconAnchor: [22, 22],
+  html: `
+    <div class="relative w-11 h-11 flex items-center justify-center">
+      <div class="absolute inset-0 rounded-full bg-accent/30 animate-ping"></div>
+      <div class="relative w-11 h-11 rounded-full bg-accent border-4 border-white shadow-xl flex items-center justify-center">
+        <i class="fa-solid fa-motorcycle text-primary text-lg"></i>
+      </div>
+    </div>`
+});
 
-  mapClient = L.map("map-cliente", { zoomControl: false, attributionControl: false })
-    .setView(startCoords, 13);
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png").addTo(mapClient);
+const pinOrigin = () => L.divIcon({
+  className: "namao-pin",
+  iconSize: [36, 44],
+  iconAnchor: [18, 42],
+  html: `
+    <div class="relative">
+      <div class="w-9 h-9 rounded-full bg-primary border-4 border-white shadow-xl flex items-center justify-center">
+        <i class="fa-solid fa-store text-white text-sm"></i>
+      </div>
+      <div class="absolute left-1/2 -translate-x-1/2 -bottom-1 w-3 h-3 bg-primary rotate-45 shadow-lg"></div>
+    </div>`
+});
 
-  locateUser((coords) => {
-    startCoords = coords;
-    mapClient.setView(coords, 15);
-    originMarker = L.marker(coords).addTo(mapClient).bindPopup("Você está aqui").openPopup();
-  });
-
-  mapClient.on("click", (e) => {
-    destCoords = [e.latlng.lat, e.latlng.lng];
-    if (destMarker) destMarker.remove();
-    destMarker = L.marker(destCoords).addTo(mapClient).bindPopup("Destino").openPopup();
-    drawRoute();
-    onDestinationSelected?.(destCoords);
-  });
-}
+const pinDestination = () => L.divIcon({
+  className: "namao-pin",
+  iconSize: [36, 44],
+  iconAnchor: [18, 42],
+  html: `
+    <div class="relative">
+      <div class="w-9 h-9 rounded-full bg-accent border-4 border-white shadow-xl flex items-center justify-center">
+        <i class="fa-solid fa-flag-checkered text-primary text-sm"></i>
+      </div>
+      <div class="absolute left-1/2 -translate-x-1/2 -bottom-1 w-3 h-3 bg-accent rotate-45 shadow-lg"></div>
+    </div>`
+});
 
 export function initDriverMap() {
   const el = document.getElementById("map-entregador");
   if (!el || mapDriver) return;
-  mapDriver = L.map("map-entregador", { zoomControl: false, attributionControl: false })
-    .setView(startCoords, 13);
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png").addTo(mapDriver);
-  locateUser((coords) => mapDriver.setView(coords, 14));
+  mapDriver = L.map("map-entregador", {
+    zoomControl: false,
+    attributionControl: false,
+    preferCanvas: true,
+    zoomAnimation: true,
+    fadeAnimation: true,
+  }).setView(startCoords, 13);
+
+  // Tile colorido mas elegante (CartoDB Voyager).
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+    subdomains: "abcd",
+    maxZoom: 20,
+    detectRetina: true,
+  }).addTo(mapDriver);
+
+  // Pequeno controle de zoom no canto inferior esquerdo
+  L.control.zoom({ position: "bottomleft" }).addTo(mapDriver);
+
+  locateUser((coords) => {
+    startCoords = coords;
+    lastUserCoords = coords;
+    mapDriver.setView(coords, 15);
+    placeDriverMarker(coords);
+  });
+}
+
+function placeDriverMarker(coords) {
+  if (!mapDriver) return;
+  if (driverMarker) {
+    driverMarker.setLatLng(coords);
+  } else {
+    driverMarker = L.marker(coords, { icon: driverIcon(), zIndexOffset: 1000 }).addTo(mapDriver);
+  }
 }
 
 function locateUser(cb) {
@@ -47,23 +105,73 @@ function locateUser(cb) {
   );
 }
 
-function drawRoute() {
-  if (!startCoords || !destCoords) return;
-  if (routeLine) routeLine.remove();
-  routeLine = L.polyline([startCoords, destCoords], { color: "#C9A84C", weight: 4 }).addTo(mapClient);
-  mapClient.fitBounds(routeLine.getBounds(), { padding: [40, 40] });
+/** Atualiza posição do entregador no mapa (chamado pelo tracker GPS). */
+export function updateDriverPosition(lat, lng) {
+  lastUserCoords = [lat, lng];
+  if (!mapDriver) return;
+  placeDriverMarker(lastUserCoords);
+}
+
+/** Centraliza mapa na localização atual do entregador. */
+export function centerDriverMap() {
+  if (!mapDriver) return;
+  if (lastUserCoords) {
+    mapDriver.setView(lastUserCoords, 15, { animate: true });
+    return;
+  }
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    (p) => {
+      const c = [p.coords.latitude, p.coords.longitude];
+      lastUserCoords = c;
+      placeDriverMarker(c);
+      mapDriver.setView(c, 15, { animate: true });
+    },
+    () => {},
+    { enableHighAccuracy: true, timeout: 8000 }
+  );
+}
+
+/**
+ * Mostra origem + destino + rota da corrida atual no mapa do motorista.
+ * Chame com `null` para limpar.
+ */
+export function showActiveDelivery(order) {
+  if (!mapDriver) return;
+  clearActiveDelivery();
+  if (!order) return;
+
+  const orig = order.originCoords;
+  const dest = order.destCoords;
+  if (orig?.length === 2) {
+    originMarker = L.marker(orig, { icon: pinOrigin() }).addTo(mapDriver);
+  }
+  if (dest?.length === 2) {
+    destMarker = L.marker(dest, { icon: pinDestination() }).addTo(mapDriver);
+  }
+  if (orig?.length === 2 && dest?.length === 2) {
+    // Linha tracejada navy + linha cheia dourada por cima (efeito dual)
+    routeLine = L.layerGroup([
+      L.polyline([orig, dest], { color: "#1B304F", weight: 8, opacity: 0.35, lineCap: "round" }),
+      L.polyline([orig, dest], { color: "#E8B93A", weight: 4, opacity: 1, lineCap: "round", dashArray: "1, 12" }),
+    ]).addTo(mapDriver);
+  }
+
+  const points = [];
+  if (orig?.length === 2) points.push(orig);
+  if (dest?.length === 2) points.push(dest);
+  if (lastUserCoords) points.push(lastUserCoords);
+  if (points.length >= 2) {
+    mapDriver.fitBounds(L.latLngBounds(points), { padding: [50, 50], maxZoom: 15 });
+  }
+}
+
+export function clearActiveDelivery() {
+  if (originMarker) { originMarker.remove(); originMarker = null; }
+  if (destMarker) { destMarker.remove(); destMarker = null; }
+  if (routeLine) { routeLine.remove(); routeLine = null; }
 }
 
 export function straightLineKm(a, b) {
   return L.latLng(a).distanceTo(L.latLng(b)) / 1000;
-}
-
-/** Tenta centralizar mapa do motorista na localização atual. */
-export function centerDriverMap() {
-  if (!mapDriver || !navigator.geolocation) return;
-  navigator.geolocation.getCurrentPosition(
-    (p) => mapDriver.setView([p.coords.latitude, p.coords.longitude], 15),
-    () => {},
-    { enableHighAccuracy: true, timeout: 8000 }
-  );
 }

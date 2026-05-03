@@ -1,6 +1,8 @@
-// Entrypoint da app
-import { auth, onAuth, handleAuth, signOutUser } from "./auth.js";
-import { showToast, switchView, switchMainTab, hideSplash, updateFileLabel } from "./ui.js";
+// Entrypoint da app — versão Driver-only (v1.5+).
+// Removida toda a lógica de cliente; este APK é exclusivo do entregador.
+
+import { onAuth, handleAuth, signOutUser } from "./auth.js";
+import { showToast, switchView, hideSplash, updateFileLabel } from "./ui.js";
 import { initTheme, toggleTheme } from "./theme.js";
 import {
   processOrderUpdate as processNewOrderAlert,
@@ -9,10 +11,7 @@ import {
 } from "./notifications.js";
 import {
   subscribeOrders,
-  createOrder,
   acceptOrder,
-  markInTransit,
-  calculatePrice
 } from "./orders.js";
 import { subscribeDriverProfile, registerDriver } from "./driverProfile.js";
 import {
@@ -28,40 +27,30 @@ import {
   setDriverStatus,
   subscribeSecurityLogs
 } from "./admin.js";
-import { startTracking, stopTracking } from "./geolocation.js";
+import { startTracking } from "./geolocation.js";
 import {
-  initClientMap,
   initDriverMap,
-  destCoords,
-  straightLineKm,
-  startCoords,
-  centerDriverMap
+  centerDriverMap,
+  showActiveDelivery,
+  clearActiveDelivery,
 } from "./maps.js";
 import {
-  APP_ID,
   DRIVER_SHARE,
-  PIX_KEY,
   SUPPORT_WHATSAPP,
-  ROUTE_DETOUR_FACTOR
 } from "./firebaseConfig.js";
 import { runVerification } from "./aiVerification.js";
-import {
-  openTrackingModal,
-  closeTrackingModal,
-  updateTrackingFromOrder
-} from "./tracking.js";
 
 let currentUser = null;
 let driverProfile = null;
 let orders = [];
 let securityLogs = [];
-let currentTotalPrice = 0;
 let driverFilter = "Todos";
 let unsubOrders = null;
 let unsubDriver = null;
 let unsubSecurity = null;
+let lastActiveOrderId = null;
 
-// --- Splash on load (some delay para deixar o efeito) ---
+// --- Splash on load ---
 window.addEventListener("DOMContentLoaded", () => {
   initTheme();
   setTimeout(() => hideSplash(), 1200);
@@ -88,23 +77,18 @@ onAuth(async (user) => {
     applyDriverProfile();
   });
 
-  // Pede permissão de notificação assim que o motorista loga (no-op em
-  // dispositivos sem suporte ou já concedido).
+  // Permissão de notificação assim que o motorista loga
   requestNotificationPermission();
 
   // Listener de pedidos
   unsubOrders = subscribeOrders((list) => {
     orders = list;
-    // Dispara som + vibração + notificação para cada pedido novo 'pending'.
-    // Fica em silêncio na primeira leitura (histórico).
     try { processNewOrderAlert(list); } catch (err) {
       console.warn("[notifications] failed to process update:", err);
     }
     renderAll();
-    syncTracking();
   });
 
-  initClientMap(() => calcPriceNow());
   initDriverMap();
   initSignaturePad();
   switchView("inicio");
@@ -115,7 +99,6 @@ onAuth(async (user) => {
     window.__isAdmin = Boolean(token.claims?.admin);
   } catch { window.__isAdmin = false; }
 
-  // Se admin, escuta logs de segurança
   if (window.__isAdmin && !unsubSecurity) {
     unsubSecurity = subscribeSecurityLogs((items) => {
       securityLogs = items;
@@ -137,16 +120,17 @@ function applyDriverProfile() {
     overlay?.classList.add("hidden");
     walletBtn?.classList.add("hidden");
     ctaDriver?.classList.remove("hidden");
-    if (displayName) displayName.innerText = currentUser?.email?.split("@")[0] || "Cliente";
-    if (statusLabel) statusLabel.innerHTML = `Status: Cliente <i class="fa-solid fa-circle-check"></i>`;
+    if (displayName) displayName.innerText = currentUser?.email?.split("@")[0] || "Entregador";
+    if (statusLabel) statusLabel.innerHTML = `Status: <span class="font-black">Aguardando cadastro</span>`;
     return;
   }
   ctaDriver?.classList.add("hidden");
 
-  if (displayName) displayName.innerText = driverProfile.name || "Motorista";
+  if (displayName) displayName.innerText = driverProfile.name || "Entregador";
   if (statusLabel) {
     const isApproved = driverProfile.status === "approved";
-    statusLabel.innerHTML = `Status: ${driverProfile.status || "Ativo"} ${isApproved ? '<i class="fa-solid fa-circle-check"></i>' : ''}`;
+    const label = isApproved ? "Aprovado" : (driverProfile.status || "Pendente");
+    statusLabel.innerHTML = `Status: <span class="font-black">${label}</span> ${isApproved ? '<i class="fa-solid fa-circle-check"></i>' : ''}`;
   }
   if (balanceLabel) {
     balanceLabel.innerText = Number(driverProfile.balance || 0)
@@ -168,10 +152,12 @@ function applyDriverProfile() {
 
 // --- Render ---
 function renderAll() {
-  renderCustomerActivity();
+  renderDriverHistory();
   renderDriverMural();
   renderAdminPanel();
   renderActivityBadge();
+  renderDriverStats();
+  syncActiveDeliveryOnMap();
 }
 
 function renderActivityBadge() {
@@ -179,47 +165,125 @@ function renderActivityBadge() {
   const badge = document.getElementById("badge-atividade");
   if (!badge) return;
   const hasActive = orders.some(
-    (o) => o.customerId === currentUser.uid &&
-      ["waiting_confirmation", "pending", "accepted", "in_transit"].includes(o.status)
+    (o) => o.driverId === currentUser.uid &&
+      ["accepted", "in_transit"].includes(o.status)
   );
   badge.classList.toggle("hidden", !hasActive);
 }
 
-function renderCustomerActivity() {
-  const el = document.getElementById("customer-orders-list");
-  if (!el || !currentUser) return;
-  const mine = orders.filter((o) => o.customerId === currentUser.uid);
-  if (mine.length === 0) {
-    el.innerHTML = `<p class="text-center py-12 text-base font-bold text-gray-400 uppercase"><i class="fa-solid fa-receipt text-3xl block mb-3 text-gray-300"></i>Sem corridas ainda</p>`;
-    return;
-  }
-  el.innerHTML = mine.map(renderCustomerOrderCard).join("");
+// === Stats do entregador (HUD do mapa + grid em Atividade) ===
+function isToday(ts) {
+  if (!ts) return false;
+  const d = new Date(ts);
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear()
+    && d.getMonth() === now.getMonth()
+    && d.getDate() === now.getDate();
 }
 
-function renderCustomerOrderCard(o) {
+function isThisWeek(ts) {
+  if (!ts) return false;
+  const d = new Date(ts);
+  const now = new Date();
+  const weekStart = new Date(now);
+  weekStart.setHours(0, 0, 0, 0);
+  weekStart.setDate(now.getDate() - now.getDay()); // domingo
+  return d >= weekStart && d <= now;
+}
+
+function computeStats(predicate) {
+  if (!currentUser) return { earnings: 0, count: 0, km: 0 };
+  let earnings = 0, count = 0, km = 0;
+  for (const o of orders) {
+    if (o.driverId !== currentUser.uid) continue;
+    if (o.status !== "completed") continue;
+    if (!predicate(o.completedAt || o.createdAt)) continue;
+    earnings += Number(o.driverEarnings ?? (o.price * DRIVER_SHARE) ?? 0);
+    count += 1;
+    km += Number(o.distanceKm || 0);
+  }
+  return { earnings, count, km };
+}
+
+function fmtBRL(n) {
+  return `R$ ${Number(n || 0).toFixed(2).replace(".", ",")}`;
+}
+function fmtKm(n) {
+  return `${Number(n || 0).toFixed(1)} km`;
+}
+
+function renderDriverStats() {
+  const today = computeStats(isToday);
+  const week = computeStats(isThisWeek);
+  const total = computeStats(() => true);
+
+  // HUD no mapa (em cima)
+  const todayE = document.getElementById("today-earnings");
+  const todayC = document.getElementById("today-count");
+  if (todayE) todayE.innerText = fmtBRL(today.earnings);
+  if (todayC) todayC.innerText = String(today.count);
+
+  // Grid na aba Atividade
+  const setText = (id, txt) => {
+    const el = document.getElementById(id);
+    if (el) el.innerText = txt;
+  };
+  setText("stats-today-earnings", fmtBRL(today.earnings));
+  setText("stats-today-count", String(today.count));
+  setText("stats-today-km", fmtKm(today.km));
+  setText("stats-week-earnings", fmtBRL(week.earnings));
+  setText("stats-week-count", String(week.count));
+  setText("stats-week-km", fmtKm(week.km));
+  setText("stats-total-earnings", fmtBRL(total.earnings));
+  setText("stats-total-count", String(total.count));
+  setText("stats-total-km", fmtKm(total.km));
+}
+
+// === Atividade — histórico do entregador ===
+function renderDriverHistory() {
+  const el = document.getElementById("driver-history-list");
+  if (!el || !currentUser) return;
+  const mine = orders.filter((o) => o.driverId === currentUser.uid);
+  if (mine.length === 0) {
+    el.innerHTML = `<p class="text-center py-12 text-base font-bold text-gray-400 uppercase"><i class="fa-solid fa-receipt text-3xl block mb-3 text-gray-300"></i>Nenhuma corrida ainda<br><span class="text-tiny font-semibold normal-case mt-2 inline-block">Aceite uma corrida no início pra começar</span></p>`;
+    return;
+  }
+  el.innerHTML = mine.slice(0, 50).map(renderDriverHistoryCard).join("");
+}
+
+function renderDriverHistoryCard(o) {
   const statusInfo = {
-    waiting_confirmation: { label: "Aguardando PIX", color: "bg-yellow-100 text-yellow-800", icon: "fa-clock" },
-    pending: { label: "Procurando motorista", color: "bg-blue-100 text-blue-800", icon: "fa-magnifying-glass" },
-    accepted: { label: "Motorista a caminho", color: "bg-purple-100 text-purple-800", icon: "fa-motorcycle" },
-    in_transit: { label: "Em trânsito", color: "bg-purple-100 text-purple-800", icon: "fa-route" },
+    accepted: { label: "A caminho da retirada", color: "bg-purple-100 text-purple-800", icon: "fa-motorcycle" },
+    in_transit: { label: "Em trânsito", color: "bg-blue-100 text-blue-800", icon: "fa-route" },
     completed: { label: "Entregue", color: "bg-green-100 text-green-800", icon: "fa-circle-check" },
     cancelled: { label: "Cancelada", color: "bg-red-100 text-red-800", icon: "fa-circle-xmark" }
   }[o.status] || { label: o.status, color: "bg-gray-100 text-gray-700", icon: "fa-circle" };
-  const trackable = ["pending", "accepted", "in_transit"].includes(o.status);
+  const earning = Number(o.driverEarnings ?? (o.price * DRIVER_SHARE) ?? 0);
+  const itemIcon = {
+    Comida: "fa-burger",
+    Documentos: "fa-file-alt",
+    Caixas: "fa-box-open"
+  }[o.itemType] || "fa-cube";
+  const when = o.completedAt
+    ? new Date(o.completedAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+    : "—";
   return `
     <div class="card-elevated">
       <div class="flex justify-between items-start mb-3">
         <div>
-          <p class="text-xs font-extrabold text-gray-500 uppercase tracking-wider">Pedido #${o.id.slice(-4).toUpperCase()}</p>
-          <p class="font-extrabold text-primary text-base mt-1"><i class="fa-solid fa-truck-ramp-box text-accentDark text-base mr-1"></i> ${o.itemType || "Item"} · ${o.veh}</p>
+          <p class="text-xs font-extrabold text-gray-500 uppercase tracking-wider">#${o.id.slice(-4).toUpperCase()} · ${when}</p>
+          <p class="font-extrabold text-primary text-base mt-1"><i class="fa-solid ${itemIcon} text-accentDark mr-1"></i> ${o.itemType || "Item"} · ${o.veh}</p>
         </div>
-        <p class="font-black text-primary text-xl">R$ ${Number(o.price).toFixed(2).replace(".", ",")}</p>
+        <div class="text-right">
+          <p class="text-tiny font-extrabold text-gray-500 uppercase">Você ganhou</p>
+          <p class="font-black text-primary text-xl">${fmtBRL(earning)}</p>
+        </div>
       </div>
       <span class="status-pill ${statusInfo.color}">
         <i class="fa-solid ${statusInfo.icon}"></i> ${statusInfo.label}
       </span>
-      ${o.driverName ? `<p class="text-sm font-bold text-gray-600 mt-3"><i class="fa-solid fa-user-shield text-accentDark"></i> Motorista: <strong>${o.driverName}</strong></p>` : ""}
-      ${trackable ? `<button onclick="window.openTrackingFor('${o.id}')" class="btn-primary mt-3 w-full text-base"><i class="fa-solid fa-satellite-dish mr-1"></i> Rastrear pedido</button>` : ""}
+      <p class="text-tiny font-bold text-gray-500 mt-3 truncate"><i class="fa-solid fa-location-dot text-primary"></i> ${o.origin || "—"}</p>
+      <p class="text-tiny font-bold text-gray-500 truncate"><i class="fa-solid fa-flag-checkered text-accentDark"></i> ${o.destination || "—"}</p>
     </div>`;
 }
 
@@ -231,12 +295,18 @@ function renderDriverMural() {
   );
   if (myActive) {
     el.innerHTML = renderActiveDelivery(myActive);
+    const pill = document.getElementById("orders-count-pill");
+    if (pill) pill.innerText = "1";
     return;
   }
   let available = orders.filter((o) => o.status === "pending");
   if (driverFilter !== "Todos") available = available.filter((o) => o.veh === driverFilter);
+
+  const pill = document.getElementById("orders-count-pill");
+  if (pill) pill.innerText = String(available.length);
+
   if (available.length === 0) {
-    el.innerHTML = `<p class="text-center py-12 text-base font-bold text-gray-400 uppercase"><i class="fa-solid fa-magnifying-glass text-3xl block mb-3 text-gray-300"></i>Procurando corridas...</p>`;
+    el.innerHTML = `<p class="text-center py-10 text-base font-bold text-gray-400 uppercase"><i class="fa-solid fa-magnifying-glass text-3xl block mb-3 text-gray-300"></i>Procurando corridas...<br><span class="text-tiny font-semibold normal-case mt-2 inline-block">Você é avisado com som assim que aparecer</span></p>`;
     return;
   }
   el.innerHTML = available.map(renderAvailableOrderCard).join("");
@@ -249,11 +319,12 @@ function renderAvailableOrderCard(o) {
     Documentos: "fa-file-alt",
     Caixas: "fa-box-open"
   }[o.itemType] || "fa-cube";
+  const km = o.distanceKm ? `${Number(o.distanceKm).toFixed(1)} km` : "";
   return `
     <div class="card-primary-gradient p-5">
       <div class="flex justify-between items-start mb-3">
         <span class="bg-accent text-primary text-xs font-black px-3 py-1.5 rounded-full uppercase flex items-center gap-1">
-          <i class="fa-solid ${itemIcon}"></i> ${o.itemType || "Item"} · ${o.veh}
+          <i class="fa-solid ${itemIcon}"></i> ${o.itemType || "Item"} · ${o.veh}${km ? ` · ${km}` : ""}
         </span>
         <p class="text-3xl font-black text-accent">R$ ${earning}</p>
       </div>
@@ -270,10 +341,20 @@ function renderAvailableOrderCard(o) {
 function renderActiveDelivery(o) {
   const earning = (o.price * DRIVER_SHARE).toFixed(2).replace(".", ",");
   const isInTransit = o.status === "in_transit";
+  const km = o.distanceKm ? `${Number(o.distanceKm).toFixed(1)} km` : "";
+
+  // botão "Abrir no Maps" (Google Maps app)
+  const dest = o.destCoords;
+  const orig = o.originCoords;
+  const target = isInTransit ? dest : orig;
+  const mapsBtn = (target?.length === 2)
+    ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${target[0]},${target[1]}&travelmode=driving" target="_blank" class="block w-full text-center mt-2 py-3 bg-white text-primary font-extrabold uppercase text-sm tracking-widest rounded-2xl border-2 border-accent active:scale-[0.98] transition"><i class="fa-solid fa-route text-accentDark mr-1"></i> Abrir no Google Maps</a>`
+    : "";
+
   return `
     <div class="card-primary-gradient p-5">
       <p class="text-xs font-black text-accent uppercase tracking-widest mb-3">
-        <i class="fa-solid fa-circle-dot fa-beat-fade"></i> Entrega em andamento — R$ ${earning}
+        <i class="fa-solid fa-circle-dot fa-beat-fade"></i> Entrega em andamento — R$ ${earning}${km ? ` · ${km}` : ""}
       </p>
       <div class="text-sm font-bold space-y-2 mb-4">
         <p><i class="fa-solid fa-location-dot text-accent w-5"></i> ${o.origin || "—"}</p>
@@ -284,7 +365,24 @@ function renderActiveDelivery(o) {
           ? `<button onclick="window.openPODFromUI('${o.id}')" class="btn-success w-full uppercase tracking-widest text-base"><i class="fa-solid fa-camera"></i> FINALIZAR (POD)</button>`
           : `<button onclick="window.openPickupPhoto('${o.id}')" class="btn-accent w-full uppercase tracking-widest text-base"><i class="fa-solid fa-camera"></i> CONFIRMAR COLETA (FOTO)</button>`
       }
+      ${mapsBtn}
     </div>`;
+}
+
+function syncActiveDeliveryOnMap() {
+  if (!currentUser) return;
+  const myActive = orders.find(
+    (o) => o.driverId === currentUser.uid && ["accepted", "in_transit"].includes(o.status)
+  );
+  if (myActive) {
+    if (myActive.id !== lastActiveOrderId) {
+      lastActiveOrderId = myActive.id;
+      showActiveDelivery(myActive);
+    }
+  } else if (lastActiveOrderId) {
+    lastActiveOrderId = null;
+    clearActiveDelivery();
+  }
 }
 
 function renderAdminPanel() {
@@ -344,98 +442,6 @@ function renderSecurityLogs() {
   }).join("");
 }
 
-// --- Cliente: cálculo e checkout ---
-function calcPriceNow() {
-  if (!destCoords) return;
-  const baseKm = straightLineKm(startCoords, destCoords);
-  const km = baseKm * ROUTE_DETOUR_FACTOR;
-  const veh = document.querySelector('input[name="vehicle"]:checked')?.value || "Moto";
-  currentTotalPrice = calculatePrice(km, veh);
-  const totalEl = document.getElementById("calc-total");
-  const kmEl = document.getElementById("calc-km");
-  if (totalEl) totalEl.innerText = `R$ ${currentTotalPrice.toFixed(2).replace(".", ",")}`;
-  if (kmEl) kmEl.innerText = `${km.toFixed(1)} KM`;
-}
-
-function updateVehicleSuggestion() {
-  const itemType = document.querySelector('input[name="itemType"]:checked')?.value;
-  // Caixas sugere Carro automaticamente
-  if (itemType === "Caixas") {
-    const carro = document.getElementById("veh-carro");
-    if (carro) carro.checked = true;
-  } else {
-    const moto = document.getElementById("veh-moto");
-    if (moto) moto.checked = true;
-  }
-  calcPriceNow();
-}
-
-function submitOrderHandler(e) {
-  e.preventDefault();
-  if (!destCoords) {
-    showToast("Toque no mapa para definir o destino");
-    return;
-  }
-  const priceEl = document.getElementById("checkout-price");
-  const pixEl = document.getElementById("checkout-pix-key");
-  if (priceEl) priceEl.innerText = `R$ ${currentTotalPrice.toFixed(2).replace(".", ",")}`;
-  if (pixEl) pixEl.value = PIX_KEY;
-  document.getElementById("checkout-modal")?.classList.remove("hidden");
-}
-
-async function confirmPaymentHandler() {
-  if (!currentUser) return;
-  const veh = document.querySelector('input[name="vehicle"]:checked')?.value || "Moto";
-  const itemType = document.querySelector('input[name="itemType"]:checked')?.value || "Comida";
-  const origin = document.getElementById("origem")?.value.trim() || "";
-  const destination = document.getElementById("destino")?.value.trim() || "";
-  try {
-    await createOrder({
-      vehicle: veh,
-      itemType,
-      price: currentTotalPrice,
-      origin,
-      destination,
-      customerId: currentUser.uid,
-      originCoords: startCoords,
-      destCoords
-    });
-    document.getElementById("checkout-modal")?.classList.add("hidden");
-    switchView("atividade");
-    showToast("Pedido criado! Aguardando confirmação do PIX pelo admin.");
-  } catch (err) {
-    showToast(err.message || "Falha ao criar pedido");
-  }
-}
-
-function copyPixKeyHandler() {
-  const input = document.getElementById("checkout-pix-key");
-  if (!input) return;
-  input.select();
-  document.execCommand("copy");
-  showToast("Chave PIX copiada!");
-}
-
-// --- Tracking ---
-function syncTracking() {
-  // Se houver modal de tracking aberto, atualiza com o pedido correspondente
-  const el = document.getElementById("tracking-modal");
-  if (!el || el.classList.contains("hidden")) return;
-  // re-busca o pedido pelo id ativo
-  const activeId = el.dataset.orderId;
-  if (!activeId) return;
-  const o = orders.find((x) => x.id === activeId);
-  if (o) updateTrackingFromOrder(o);
-}
-
-function openTrackingFor(orderId) {
-  const o = orders.find((x) => x.id === orderId);
-  if (!o) return;
-  const el = document.getElementById("tracking-modal");
-  if (el) el.dataset.orderId = orderId;
-  openTrackingModal(o);
-}
-
 // --- Motorista ---
 async function acceptOrderFromUI(orderId) {
   if (!driverProfile || driverProfile.status !== "approved") {
@@ -449,13 +455,6 @@ async function acceptOrderFromUI(orderId) {
   } catch (err) {
     showToast(err.message || "Falha ao aceitar corrida");
   }
-}
-
-async function markPickedUp(orderId) {
-  try {
-    await markInTransit(orderId);
-    showToast("Pacote coletado — siga para o destino");
-  } catch (err) { showToast(err.message); }
 }
 
 async function openPODFromUI(orderId) {
@@ -514,7 +513,6 @@ async function registerDriverFromUI(e) {
     return;
   }
 
-  // Roda a verificação de IA
   const result = await runVerification({ uid: currentUser.uid, name, cpf });
   if (!result.ok) {
     showToast(result.reason || "Cadastro reprovado");
@@ -539,16 +537,8 @@ Object.assign(window, {
   handleAuth,
   signOutUser,
   switchView,
-  switchMainTab,
-  submitOrder: submitOrderHandler,
-  calculatePrice: calcPriceNow,
-  updateVehicleSuggestion,
-  confirmPayment: confirmPaymentHandler,
-  closeCheckout: () => document.getElementById("checkout-modal")?.classList.add("hidden"),
-  copyPixKey: copyPixKeyHandler,
   acceptOrderFromUI,
   openPODFromUI,
-  markPickedUp,
   clearSignature,
   validatePOD,
   confirmDeliveryWithPOD: () => confirmDeliveryWithPOD(currentUser.uid),
@@ -562,15 +552,11 @@ Object.assign(window, {
     ["filter-todos", "filter-moto", "filter-carro"].forEach((id) => {
       const b = document.getElementById(id);
       if (!b) return;
-      b.classList.remove("bg-primary", "text-white", "shadow-sm");
-      b.classList.add("text-gray-500");
+      b.classList.remove("active");
     });
     const map = { Todos: "filter-todos", Moto: "filter-moto", Carro: "filter-carro" };
     const active = document.getElementById(map[f]);
-    if (active) {
-      active.classList.add("bg-primary", "text-white", "shadow-sm");
-      active.classList.remove("text-gray-500");
-    }
+    if (active) active.classList.add("active");
     renderDriverMural();
   },
   openDriverWallet: () => {
@@ -580,7 +566,7 @@ Object.assign(window, {
   },
   openWhatsAppSupport: () => window.open(`https://wa.me/${SUPPORT_WHATSAPP}`, "_blank"),
   centerDriverMap,
-  closeTrackingModal,
-  openTrackingFor,
+  testNewOrderSound,
+  toggleTheme,
   updateFileLabel
 });
