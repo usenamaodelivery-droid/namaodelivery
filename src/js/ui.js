@@ -1,4 +1,6 @@
-// UI helpers: toast, splash, navegação principal, bottom nav
+// UI helpers: toast, splash, navegação principal, bottom nav.
+// App é exclusivo do entregador — sem aba cliente.
+
 export function showToast(message, duration = 3000) {
   const el = document.getElementById("toast-notification");
   if (!el) return;
@@ -23,7 +25,6 @@ export function hideSplash() {
 }
 
 const MAIN_VIEWS = [
-  "view-cliente",
   "view-entregador",
   "view-atividade",
   "view-perfil",
@@ -33,12 +34,10 @@ const MAIN_VIEWS = [
 
 export function switchView(view) {
   MAIN_VIEWS.forEach((id) => document.getElementById(id)?.classList.add("hidden"));
-  document.getElementById("main-tabs")?.classList.add("hidden");
   document.getElementById("bottom-nav")?.classList.remove("hidden");
 
   if (view === "inicio") {
-    document.getElementById("main-tabs")?.classList.remove("hidden");
-    switchMainTab("cliente");
+    document.getElementById("view-entregador")?.classList.remove("hidden");
   } else if (view === "atividade") {
     document.getElementById("view-atividade")?.classList.remove("hidden");
   } else if (view === "perfil") {
@@ -74,16 +73,6 @@ function updateBottomNav(view) {
       btn.classList.remove("text-gray-400");
     }
   }
-}
-
-export function switchMainTab(tab) {
-  document.getElementById("view-cliente")?.classList.add("hidden");
-  document.getElementById("view-entregador")?.classList.add("hidden");
-  document.getElementById(`view-${tab}`)?.classList.remove("hidden");
-  const btnCliente = document.getElementById("btn-cliente");
-  const btnEntregador = document.getElementById("btn-entregador");
-  if (btnCliente) btnCliente.className = `flex-1 py-4 transition ${tab === "cliente" ? "tab-active" : "tab-inactive"}`;
-  if (btnEntregador) btnEntregador.className = `flex-1 py-4 transition ${tab === "entregador" ? "tab-active" : "tab-inactive"}`;
 }
 
 export function updateFileLabel(inputId, labelId) {

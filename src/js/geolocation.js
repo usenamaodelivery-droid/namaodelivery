@@ -3,6 +3,7 @@
 import { Capacitor } from "https://cdn.jsdelivr.net/npm/@capacitor/core@6/+esm";
 import { updateDriverLocation } from "./orders.js";
 import { LOCATION_UPDATE_MS } from "./firebaseConfig.js";
+import { updateDriverPosition } from "./maps.js";
 
 let tracking = false;
 let watchId = null;
@@ -56,6 +57,9 @@ export async function startTracking(orderId) {
 }
 
 async function throttledSend(lat, lng) {
+  // Atualiza visualmente o marker do motorista no mapa imediatamente
+  try { updateDriverPosition(lat, lng); } catch { /* ignore */ }
+
   const now = Date.now();
   if (now - lastSent < LOCATION_UPDATE_MS) return;
   lastSent = now;
