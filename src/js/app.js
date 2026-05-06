@@ -56,6 +56,14 @@ let unsubDriver = null;
 let unsubSecurity = null;
 let lastActiveOrderId = null;
 
+// Estado online/offline persiste em localStorage. Default = online.
+let driverOnline = (() => {
+  try {
+    const saved = localStorage.getItem("namao_driver_online");
+    return saved === null ? true : saved === "true";
+  } catch { return true; }
+})();
+
 // --- Splash on load ---
 window.addEventListener("DOMContentLoaded", () => {
   initTheme();
@@ -93,7 +101,9 @@ onAuth(async (user) => {
   });
   requestNotificationPermission();
 
-  // Listener de pedidos
+  // Listener de pedidos. Quando offline, ainda assinamos pra renderizar
+  // corridas ativas do motorista (não pode perder uma entrega em andamento),
+  // mas o filtro de "available" já zera a lista nesse caso.
   unsubOrders = subscribeOrders((list) => {
     orders = list;
     try { processNewOrderAlert(list); } catch (err) {
@@ -105,6 +115,7 @@ onAuth(async (user) => {
   initDriverMap();
   initSignaturePad();
   switchView("inicio");
+  applyOnlineStatusUI();
 
   // Detecta admin via custom claim
   try {
@@ -135,6 +146,8 @@ function applyDriverProfile() {
     notifyToggle.classList.toggle("active", enabled);
     notifyToggle.setAttribute("aria-pressed", String(enabled));
   }
+
+  applyDriverDocs(driverProfile);
 
   if (!driverProfile) {
     overlay?.classList.add("hidden");
@@ -319,6 +332,19 @@ function renderDriverMural() {
     if (pill) pill.innerText = "1";
     return;
   }
+
+  // Offline: não mostra corridas disponíveis. Motorista precisa virar online.
+  if (!driverOnline) {
+    const pill = document.getElementById("orders-count-pill");
+    if (pill) pill.innerText = "—";
+    el.innerHTML = `<div class="text-center py-10 text-base font-bold text-gray-400 uppercase">
+      <i class="fa-solid fa-power-off text-3xl block mb-3 text-gray-300"></i>
+      Você está offline
+      <p class="text-tiny font-semibold normal-case mt-2 text-gray-500">Toque em <span class="text-primary font-extrabold">OFFLINE</span> no topo do mapa pra começar a receber corridas.</p>
+    </div>`;
+    return;
+  }
+
   let available = orders.filter((o) => o.status === "pending");
   if (driverFilter !== "Todos") available = available.filter((o) => o.veh === driverFilter);
 
@@ -330,6 +356,76 @@ function renderDriverMural() {
     return;
   }
   el.innerHTML = available.map(renderAvailableOrderCard).join("");
+}
+
+function applyOnlineStatusUI() {
+  const btn = document.getElementById("online-toggle");
+  const dot = document.getElementById("online-dot");
+  const lbl = document.getElementById("online-label");
+  if (!btn || !dot || !lbl) return;
+
+  if (driverOnline) {
+    btn.setAttribute("aria-pressed", "true");
+    dot.className = "w-2.5 h-2.5 bg-green-500 rounded-full shadow-[0_0_8px_#22c55e] animate-pulse";
+    lbl.innerText = "Online";
+    lbl.className = "text-xs font-extrabold text-primary uppercase tracking-wider";
+  } else {
+    btn.setAttribute("aria-pressed", "false");
+    dot.className = "w-2.5 h-2.5 bg-gray-400 rounded-full";
+    lbl.innerText = "Offline";
+    lbl.className = "text-xs font-extrabold text-gray-500 uppercase tracking-wider";
+  }
+}
+
+function toggleDriverOnlineImpl() {
+  driverOnline = !driverOnline;
+  try { localStorage.setItem("namao_driver_online", String(driverOnline)); } catch {}
+  applyOnlineStatusUI();
+  renderDriverMural();
+  showToast(driverOnline ? "Você está ONLINE — recebendo corridas." : "Você está OFFLINE — não recebe novas corridas.");
+}
+
+function applyDriverDocs(profile) {
+  const card = document.getElementById("driver-docs-card");
+  if (!card) return;
+  const cnh = profile?.cnhPhoto;
+  const selfie = profile?.selfiePhoto;
+  if (!cnh && !selfie) {
+    card.classList.add("hidden");
+    return;
+  }
+  card.classList.remove("hidden");
+  const cnhImg = document.getElementById("profile-cnh-img");
+  const cnhFb = document.getElementById("profile-cnh-fallback");
+  const selfImg = document.getElementById("profile-selfie-img");
+  const selfFb = document.getElementById("profile-selfie-fallback");
+  if (cnh && cnhImg) {
+    cnhImg.src = cnh;
+    cnhImg.classList.remove("hidden");
+    cnhFb?.classList.add("hidden");
+  }
+  if (selfie && selfImg) {
+    selfImg.src = selfie;
+    selfImg.classList.remove("hidden");
+    selfFb?.classList.add("hidden");
+  }
+}
+
+function openDocPreview(which) {
+  const url = which === "cnh"
+    ? document.getElementById("profile-cnh-img")?.src
+    : document.getElementById("profile-selfie-img")?.src;
+  if (!url) return;
+  const modal = document.getElementById("doc-preview-modal");
+  const img = document.getElementById("doc-preview-img");
+  if (modal && img) {
+    img.src = url;
+    modal.classList.remove("hidden");
+  }
+}
+
+function closeDocPreview() {
+  document.getElementById("doc-preview-modal")?.classList.add("hidden");
 }
 
 function renderAvailableOrderCard(o) {
@@ -599,5 +695,8 @@ Object.assign(window, {
   },
   centerDriverMap,
   toggleTheme,
-  updateFileLabel
+  updateFileLabel,
+  toggleDriverOnline: toggleDriverOnlineImpl,
+  openDocPreview,
+  closeDocPreview,
 });

@@ -42,8 +42,8 @@
         <!-- SPLASH SCREEN -->
         <div id="splash-screen" class="absolute inset-0 z-[100] flex flex-col items-center justify-center transition-opacity duration-500" style="background: linear-gradient(135deg, #1B304F 0%, #0F1F3A 100%);">
             <img src="icons/namao-icon.png" alt="Logo NaMão" class="w-36 h-36 rounded-3xl shadow-2xl mb-6 animate-bounce" onerror="this.onerror=null; this.src='https://via.placeholder.com/150/1B304F/E8B93A?text=N'">
-            <h1 class="text-5xl font-black tracking-tight text-white"><span class="text-accent">Na</span>Mão</h1>
-            <p class="text-accent mt-2 text-base tracking-[0.3em] uppercase font-extrabold">Delivery</p>
+            <h1 class="text-4xl font-black tracking-tight text-white"><span class="text-gray-200 font-light">Delivery</span> <span class="text-accent">Na</span>Mão</h1>
+            <p class="text-accent/90 mt-2 text-xs tracking-[0.3em] uppercase font-extrabold">App do Entregador</p>
             <div class="mt-10 border-4 border-accent border-t-transparent rounded-full w-10 h-10 animate-spin"></div>
         </div>
 
@@ -60,7 +60,7 @@
         <div id="auth-screen" class="absolute inset-0 hidden z-[150] flex flex-col p-8 fade-in" style="background: linear-gradient(135deg, #1B304F 0%, #0F1F3A 100%);">
             <div class="flex-1 flex flex-col justify-center items-center text-center">
                 <img src="icons/namao-icon.png" class="w-24 h-24 rounded-3xl mb-6 shadow-2xl border-2 border-accent/40" alt="NaMão logo" onerror="this.onerror=null; this.src='https://via.placeholder.com/96/1B304F/E8B93A?text=N'">
-                <h1 class="text-5xl font-black text-white tracking-tight">Na<span class="text-accent">Mão</span></h1>
+                <h1 class="text-4xl font-black text-white tracking-tight"><span class="text-gray-200 font-light">Delivery</span> <span class="text-accent">Na</span>Mão</h1>
                 <p class="text-gray-200 text-sm font-extrabold mt-2 uppercase tracking-[0.3em] mb-3">App do Entregador</p>
                 <p class="text-accent/90 text-xs font-bold mb-10 max-w-xs">Aceite corridas, ganhe 85% e receba via PIX. Cadastro aprovado em 2 minutos.</p>
 
@@ -98,12 +98,13 @@
                 <div class="w-full flex-1 bg-gray-200 relative shadow-inner">
                     <div id="map-entregador" class="w-full h-full"></div>
 
-                    <!-- HUD: status online + ganhos do dia (sobreposto no mapa) -->
-                    <div class="absolute top-3 left-3 right-3 z-10 flex justify-between items-start gap-2">
-                        <div class="bg-white/95 backdrop-blur px-3 py-2 rounded-2xl shadow-lg border border-white/40 flex items-center gap-2">
-                            <div id="online-dot" class="w-2.5 h-2.5 bg-green-500 rounded-full shadow-[0_0_8px_#22c55e] animate-pulse"></div>
+                    <!-- HUD: toggle online + ganhos do dia (sobreposto no mapa) -->
+                    <div class="absolute top-3 left-3 right-3 z-20 flex justify-between items-start gap-2">
+                        <button id="online-toggle" type="button" onclick="toggleDriverOnline()" aria-pressed="true"
+                            class="online-btn bg-white/95 backdrop-blur px-3 py-2 rounded-2xl shadow-lg border border-white/40 flex items-center gap-2 active:scale-[0.97] transition">
+                            <span id="online-dot" class="w-2.5 h-2.5 bg-green-500 rounded-full shadow-[0_0_8px_#22c55e] animate-pulse"></span>
                             <span id="online-label" class="text-xs font-extrabold text-primary uppercase tracking-wider">Online</span>
-                        </div>
+                        </button>
                         <div class="bg-primary/95 backdrop-blur px-4 py-2 rounded-2xl shadow-lg border border-accent/30 text-right">
                             <p class="text-[10px] font-extrabold text-accent uppercase tracking-widest leading-none mb-0.5">Hoje</p>
                             <p class="text-base font-black text-white leading-tight"><span id="today-earnings">R$ 0,00</span></p>
@@ -188,6 +189,30 @@
                         <i class="fa-solid fa-wallet text-4xl text-accent"></i>
                     </div>
 
+                    <!-- Documentos enviados (CNH + Selfie) - aparece após cadastro -->
+                    <div id="driver-docs-card" class="hidden bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-sm font-extrabold text-gray-500 uppercase tracking-wider"><i class="fa-solid fa-id-card text-primary mr-1"></i> Meus Documentos</h3>
+                            <span class="text-tiny font-extrabold text-success uppercase"><i class="fa-solid fa-circle-check"></i> Verificados</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <p class="text-tiny font-bold text-gray-500 uppercase tracking-wider mb-1">CNH</p>
+                                <div class="rounded-xl overflow-hidden border-2 border-gray-100 bg-gray-50 aspect-[4/3] flex items-center justify-center cursor-pointer" onclick="openDocPreview('cnh')">
+                                    <img id="profile-cnh-img" alt="CNH" class="w-full h-full object-cover hidden" />
+                                    <i id="profile-cnh-fallback" class="fa-solid fa-id-card text-3xl text-gray-300"></i>
+                                </div>
+                            </div>
+                            <div>
+                                <p class="text-tiny font-bold text-gray-500 uppercase tracking-wider mb-1">Selfie</p>
+                                <div class="rounded-xl overflow-hidden border-2 border-gray-100 bg-gray-50 aspect-[4/3] flex items-center justify-center cursor-pointer" onclick="openDocPreview('selfie')">
+                                    <img id="profile-selfie-img" alt="Selfie" class="w-full h-full object-cover hidden" />
+                                    <i id="profile-selfie-fallback" class="fa-solid fa-user text-3xl text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <button id="cta-driver-banner" type="button" onclick="switchView('driver-registration')" class="cta-driver w-full text-left flex items-center gap-4 active:scale-[0.98] transition">
                         <div class="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center shadow-lg flex-shrink-0">
                             <i class="fa-solid fa-motorcycle text-3xl text-accent"></i>
@@ -239,7 +264,7 @@
                     <button onclick="signOutUser()" class="w-full bg-red-50 text-danger font-extrabold py-4 rounded-2xl shadow-sm border-2 border-red-200 hover:bg-red-100 transition text-base">
                         <i class="fa-solid fa-right-from-bracket mr-2"></i> Sair da Conta
                     </button>
-                    <p class="text-center text-xs text-gray-400 mt-2 font-semibold">Delivery NaMão v1.5.2 · App do Entregador</p>
+                    <p class="text-center text-xs text-gray-400 mt-2 font-semibold">Delivery NaMão v1.5.3 · App do Entregador</p>
                 </div>
             </main>
 
@@ -280,10 +305,11 @@
                                             <i class="fa-solid fa-camera text-primary text-3xl mb-2"></i>
                                             <p class="text-sm text-primary font-extrabold">Tirar foto da CNH</p>
                                         </div>
-                                        <input id="driver-cnh" type="file" accept="image/*" capture="environment" class="hidden" required onchange="updateFileLabel('driver-cnh', 'label-cnh')" />
+                                        <input id="driver-cnh" type="file" accept="image/*" capture="environment" class="hidden" required onchange="updateFileLabel('driver-cnh', 'label-cnh', 'preview-cnh')" />
                                     </label>
                                 </div>
                                 <p id="label-cnh" class="text-sm text-center text-success font-extrabold mt-2 hidden"><i class="fa-solid fa-check"></i> CNH Anexada</p>
+                                <div id="preview-cnh"></div>
                             </div>
 
                             <div class="relative">
@@ -294,10 +320,11 @@
                                             <i class="fa-solid fa-user-astronaut text-primary text-3xl mb-2"></i>
                                             <p class="text-sm text-primary font-extrabold">Tirar selfie</p>
                                         </div>
-                                        <input id="driver-selfie" type="file" accept="image/*" capture="user" class="hidden" required onchange="updateFileLabel('driver-selfie', 'label-selfie')" />
+                                        <input id="driver-selfie" type="file" accept="image/*" capture="user" class="hidden" required onchange="updateFileLabel('driver-selfie', 'label-selfie', 'preview-selfie')" />
                                     </label>
                                 </div>
                                 <p id="label-selfie" class="text-sm text-center text-success font-extrabold mt-2 hidden"><i class="fa-solid fa-check"></i> Selfie Anexada</p>
+                                <div id="preview-selfie"></div>
                             </div>
                         </div>
 
@@ -423,6 +450,14 @@
         <div id="toast-notification" class="fixed top-5 left-1/2 transform -translate-x-1/2 bg-primaryDark text-white px-5 py-3 rounded-2xl shadow-2xl z-[800] transition-all duration-300 opacity-0 pointer-events-none translate-y-[-20px] flex items-center gap-3 max-w-[90%] border border-white/10">
             <i class="fa-solid fa-bell text-accent text-xl"></i>
             <span id="toast-message" class="text-base font-bold text-white"></span>
+        </div>
+
+        <!-- LIGHTBOX: preview de documento (CNH/Selfie) -->
+        <div id="doc-preview-modal" class="hidden fixed inset-0 bg-black/90 z-[900] flex items-center justify-center p-4" onclick="closeDocPreview()">
+            <button class="absolute top-4 right-4 text-white text-3xl w-12 h-12 flex items-center justify-center bg-white/10 rounded-full" aria-label="Fechar">
+                <i class="fa-solid fa-times"></i>
+            </button>
+            <img id="doc-preview-img" alt="Documento" class="max-w-full max-h-full object-contain rounded-2xl shadow-2xl" />
         </div>
 
         <!-- BOTTOM NAV -->
