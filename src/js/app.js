@@ -14,6 +14,8 @@ import {
 import {
   subscribeOrders,
   acceptOrder,
+  subscribeMessages,
+  sendMessage,
 } from "./orders.js";
 import {
   subscribeDriverProfile,
@@ -55,7 +57,10 @@ let driverFilter = "Todos";
 let unsubOrders = null;
 let unsubDriver = null;
 let unsubSecurity = null;
+let unsubMessages = null;
 let lastActiveOrderId = null;
+let chatMessages = [];
+let chatLastMsgCount = 0;
 
 // Estado online/offline persiste em localStorage. Default = online.
 let driverOnline = (() => {
@@ -332,6 +337,8 @@ function renderDriverMural() {
     el.innerHTML = renderActiveDelivery(myActive);
     const pill = document.getElementById("orders-count-pill");
     if (pill) pill.innerText = "1";
+    // Re-popula chat depois que o DOM da corrida ativa é re-renderizado.
+    renderChatPanel();
     return;
   }
 
@@ -572,6 +579,18 @@ function renderActiveDelivery(o) {
             <button onclick="window.openPickupPhoto('${o.id}')" class="btn-accent w-full uppercase tracking-widest text-base"><i class="fa-solid fa-camera"></i> CONFIRMAR COLETA (FOTO)</button>
           `
       }
+
+      <div class="mt-4 bg-white/5 border border-white/10 rounded-2xl p-3">
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-[11px] font-black text-accent uppercase tracking-widest"><i class="fa-solid fa-comments"></i> Chat com o cliente</p>
+          <span class="text-[10px] text-white/50">privado, só aqui</span>
+        </div>
+        <div id="chat-messages" class="bg-white/10 rounded-xl p-2 mb-2 max-h-40 overflow-y-auto flex flex-col gap-1.5"></div>
+        <div class="flex gap-2">
+          <input id="chat-input" type="text" maxlength="500" placeholder="Mensagem…" class="flex-1 bg-white/95 text-primary text-sm px-3 py-2 rounded-xl outline-none" onkeydown="if(event.key==='Enter'){event.preventDefault();window.sendChatFromUI();}" />
+          <button onclick="window.sendChatFromUI()" class="bg-accent text-primary font-black text-xs uppercase tracking-wider px-3 py-2 rounded-xl">Enviar</button>
+        </div>
+      </div>
     </div>`;
 }
 
@@ -584,10 +603,87 @@ function syncActiveDeliveryOnMap() {
     if (myActive.id !== lastActiveOrderId) {
       lastActiveOrderId = myActive.id;
       showActiveDelivery(myActive);
+      subscribeChat(myActive.id);
     }
   } else if (lastActiveOrderId) {
     lastActiveOrderId = null;
     clearActiveDelivery();
+    unsubscribeChat();
+  }
+}
+
+function subscribeChat(orderId) {
+  unsubscribeChat();
+  chatMessages = [];
+  chatLastMsgCount = 0;
+  unsubMessages = subscribeMessages(orderId, (msgs) => {
+    chatMessages = msgs;
+    // Beep curto quando chega mensagem nova do cliente
+    if (msgs.length > chatLastMsgCount) {
+      const last = msgs[msgs.length - 1];
+      if (last && last.from === "customer" && chatLastMsgCount > 0) {
+        try {
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          const ctx = new Ctx();
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.frequency.value = 760;
+          g.gain.setValueAtTime(0.0001, ctx.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
+          o.connect(g).connect(ctx.destination);
+          o.start();
+          o.stop(ctx.currentTime + 0.28);
+          if (navigator.vibrate) navigator.vibrate([60, 30, 60]);
+        } catch { /* ignore */ }
+      }
+    }
+    chatLastMsgCount = msgs.length;
+    renderChatPanel();
+  });
+}
+
+function unsubscribeChat() {
+  if (unsubMessages) { unsubMessages(); unsubMessages = null; }
+  chatMessages = [];
+  chatLastMsgCount = 0;
+}
+
+function renderChatPanel() {
+  const list = document.getElementById("chat-messages");
+  if (!list) return;
+  if (chatMessages.length === 0) {
+    list.innerHTML = `<p class="text-xs text-white/60 text-center py-2">Nenhuma mensagem ainda. Mande um oi pro cliente 👋</p>`;
+    return;
+  }
+  list.innerHTML = chatMessages.map((m) => {
+    const mine = m.from === "driver";
+    const hhmm = new Date(m.at || Date.now()).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const text = String(m.text || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return `
+      <div class="flex ${mine ? "justify-end" : "justify-start"}">
+        <div class="max-w-[85%] rounded-2xl px-3 py-1.5 text-sm ${mine ? "bg-accent text-primary rounded-br-sm font-bold" : "bg-white/90 text-primary rounded-bl-sm"}">
+          <div class="whitespace-pre-wrap break-words">${text}</div>
+          <div class="text-[10px] ${mine ? "text-primary/70" : "text-primary/60"} mt-0.5">${hhmm}</div>
+        </div>
+      </div>`;
+  }).join("");
+  list.scrollTop = list.scrollHeight;
+}
+
+async function sendChatFromUI() {
+  if (!lastActiveOrderId) return;
+  const input = document.getElementById("chat-input");
+  if (!input) return;
+  const text = (input.value || "").trim();
+  if (!text) return;
+  input.value = "";
+  try {
+    await sendMessage(lastActiveOrderId, "driver", text);
+  } catch (err) {
+    console.warn("[chat] send failed:", err);
+    showToast("Erro ao enviar mensagem.");
+    input.value = text; // restore
   }
 }
 
@@ -797,6 +893,7 @@ Object.assign(window, {
   centerDriverMap,
   toggleTheme,
   updateFileLabel,
+  sendChatFromUI,
   toggleDriverOnline: toggleDriverOnlineImpl,
   openDocPreview,
   closeDocPreview,

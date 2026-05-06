@@ -59,6 +59,24 @@ service cloud.firestore {
       );
 
       allow delete: if isAdmin();
+
+      // Chat interno cliente ↔ motorista. Qualquer usuário autenticado
+      // envolvido no pedido pode ler; o motorista responsável pode escrever
+      // mensagens. Mensagens do cliente entram via Admin SDK no servidor
+      // da PWA (bypass rules), então aqui só autorizamos o motorista.
+      match /messages/{messageId} {
+        allow read: if isSignedIn();
+
+        allow create: if isSignedIn()
+          && request.resource.data.from == 'driver'
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 500
+          && request.resource.data.at is number;
+
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
     }
 
     // Logs de segurança — qualquer usuário autenticado pode CRIAR um log
