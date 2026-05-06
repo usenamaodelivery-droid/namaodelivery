@@ -4,16 +4,25 @@
 import { onAuth, handleAuth, signOutUser } from "./auth.js";
 import { showToast, switchView, hideSplash, updateFileLabel } from "./ui.js";
 import { initTheme, toggleTheme } from "./theme.js";
+import { refreshPermissionStatuses, requestAppPermission } from "./permissions.js";
 import {
   processOrderUpdate as processNewOrderAlert,
   requestNotificationPermission,
   testNewOrderSound,
+  onFcmToken,
 } from "./notifications.js";
 import {
   subscribeOrders,
   acceptOrder,
+  subscribeMessages,
+  sendMessage,
 } from "./orders.js";
-import { subscribeDriverProfile, registerDriver } from "./driverProfile.js";
+import {
+  subscribeDriverProfile,
+  registerDriver,
+  saveDriverFcmToken,
+  setNotifyOnNewOrder,
+} from "./driverProfile.js";
 import {
   openPOD,
   closePOD,
@@ -48,7 +57,18 @@ let driverFilter = "Todos";
 let unsubOrders = null;
 let unsubDriver = null;
 let unsubSecurity = null;
+let unsubMessages = null;
 let lastActiveOrderId = null;
+let chatMessages = [];
+let chatLastMsgCount = 0;
+
+// Estado online/offline persiste em localStorage. Default = online.
+let driverOnline = (() => {
+  try {
+    const saved = localStorage.getItem("namao_driver_online");
+    return saved === null ? true : saved === "true";
+  } catch { return true; }
+})();
 
 // --- Splash on load ---
 window.addEventListener("DOMContentLoaded", () => {
@@ -77,10 +97,19 @@ onAuth(async (user) => {
     applyDriverProfile();
   });
 
-  // Permissão de notificação assim que o motorista loga
+  // Permissão de notificação assim que o motorista loga.
+  // Quando o Capacitor entregar o FCM token, salvamos no perfil pra que
+  // a Cloud Function consiga mandar push pra esse device.
+  onFcmToken((token) => {
+    saveDriverFcmToken(user.uid, token).catch((err) =>
+      console.warn("[fcm] save token failed:", err),
+    );
+  });
   requestNotificationPermission();
 
-  // Listener de pedidos
+  // Listener de pedidos. Quando offline, ainda assinamos pra renderizar
+  // corridas ativas do motorista (não pode perder uma entrega em andamento),
+  // mas o filtro de "available" já zera a lista nesse caso.
   unsubOrders = subscribeOrders((list) => {
     orders = list;
     try { processNewOrderAlert(list); } catch (err) {
@@ -92,6 +121,7 @@ onAuth(async (user) => {
   initDriverMap();
   initSignaturePad();
   switchView("inicio");
+  applyOnlineStatusUI();
 
   // Detecta admin via custom claim
   try {
@@ -115,6 +145,16 @@ function applyDriverProfile() {
   const displayName = document.getElementById("profile-display-name");
   const statusLabel = document.getElementById("profile-status");
   const balanceLabel = document.getElementById("profile-wallet-balance");
+  const notifyToggle = document.getElementById("notify-toggle");
+
+  if (notifyToggle) {
+    const enabled = driverProfile?.notifyOnNewOrder !== false;
+    notifyToggle.setAttribute("aria-pressed", String(enabled));
+    notifyToggle.querySelector(".theme-toggle-thumb")?.classList.toggle("on", enabled);
+  }
+
+  applyDriverDocs(driverProfile);
+  applyDriverAvatar(driverProfile);
 
   if (!driverProfile) {
     overlay?.classList.add("hidden");
@@ -297,8 +337,23 @@ function renderDriverMural() {
     el.innerHTML = renderActiveDelivery(myActive);
     const pill = document.getElementById("orders-count-pill");
     if (pill) pill.innerText = "1";
+    // Re-popula chat depois que o DOM da corrida ativa é re-renderizado.
+    renderChatPanel();
     return;
   }
+
+  // Offline: não mostra corridas disponíveis. Motorista precisa virar online.
+  if (!driverOnline) {
+    const pill = document.getElementById("orders-count-pill");
+    if (pill) pill.innerText = "—";
+    el.innerHTML = `<div class="text-center py-10 text-base font-bold text-gray-400 uppercase">
+      <i class="fa-solid fa-power-off text-3xl block mb-3 text-gray-300"></i>
+      Você está offline
+      <p class="text-tiny font-semibold normal-case mt-2 text-gray-500">Toque em <span class="text-primary font-extrabold">OFFLINE</span> no topo do mapa pra começar a receber corridas.</p>
+    </div>`;
+    return;
+  }
+
   let available = orders.filter((o) => o.status === "pending");
   if (driverFilter !== "Todos") available = available.filter((o) => o.veh === driverFilter);
 
@@ -312,6 +367,115 @@ function renderDriverMural() {
   el.innerHTML = available.map(renderAvailableOrderCard).join("");
 }
 
+function applyOnlineStatusUI() {
+  const btn = document.getElementById("online-toggle");
+  const dot = document.getElementById("online-dot");
+  const lbl = document.getElementById("online-label");
+  if (!btn || !dot || !lbl) return;
+
+  if (driverOnline) {
+    btn.setAttribute("aria-pressed", "true");
+    dot.className = "w-2.5 h-2.5 bg-green-500 rounded-full shadow-[0_0_8px_#22c55e] animate-pulse";
+    lbl.innerText = "Online";
+    lbl.className = "text-xs font-extrabold text-primary uppercase tracking-wider";
+  } else {
+    btn.setAttribute("aria-pressed", "false");
+    dot.className = "w-2.5 h-2.5 bg-gray-400 rounded-full";
+    lbl.innerText = "Offline";
+    lbl.className = "text-xs font-extrabold text-gray-500 uppercase tracking-wider";
+  }
+}
+
+function toggleDriverOnlineImpl() {
+  driverOnline = !driverOnline;
+  try { localStorage.setItem("namao_driver_online", String(driverOnline)); } catch {}
+  applyOnlineStatusUI();
+  renderDriverMural();
+  showToast(driverOnline ? "Você está ONLINE — recebendo corridas." : "Você está OFFLINE — não recebe novas corridas.");
+}
+
+function applyDriverAvatar(profile) {
+  const img = document.getElementById("profile-avatar-img");
+  const fb = document.getElementById("profile-avatar-fallback");
+  if (!img || !fb) return;
+  const selfie = profile?.selfiePhoto;
+  if (selfie) {
+    img.src = selfie;
+    img.classList.remove("hidden");
+    fb.classList.add("hidden");
+  } else {
+    img.classList.add("hidden");
+    fb.classList.remove("hidden");
+  }
+}
+
+function applyDriverDocs(profile) {
+  const card = document.getElementById("driver-docs-card");
+  if (!card) return;
+  const cnh = profile?.cnhPhoto;
+  const selfie = profile?.selfiePhoto;
+  if (!cnh && !selfie) {
+    card.classList.add("hidden");
+    return;
+  }
+  card.classList.remove("hidden");
+  const cnhImg = document.getElementById("profile-cnh-img");
+  const cnhFb = document.getElementById("profile-cnh-fallback");
+  const selfImg = document.getElementById("profile-selfie-img");
+  const selfFb = document.getElementById("profile-selfie-fallback");
+  if (cnh && cnhImg) {
+    cnhImg.src = cnh;
+    cnhImg.classList.remove("hidden");
+    cnhFb?.classList.add("hidden");
+  }
+  if (selfie && selfImg) {
+    selfImg.src = selfie;
+    selfImg.classList.remove("hidden");
+    selfFb?.classList.add("hidden");
+  }
+}
+
+function openDocPreview(which) {
+  const url = which === "cnh"
+    ? document.getElementById("profile-cnh-img")?.src
+    : document.getElementById("profile-selfie-img")?.src;
+  if (!url) return;
+  const modal = document.getElementById("doc-preview-modal");
+  const img = document.getElementById("doc-preview-img");
+  if (modal && img) {
+    img.src = url;
+    modal.classList.remove("hidden");
+  }
+}
+
+function closeDocPreview() {
+  document.getElementById("doc-preview-modal")?.classList.add("hidden");
+}
+
+function haversineKm(a, b) {
+  if (!a || !b || a.length !== 2 || b.length !== 2) return null;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const [lat1, lon1] = a;
+  const [lat2, lon2] = b;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const x =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(x)));
+}
+
+function getDriverPosition() {
+  try {
+    const raw = localStorage.getItem("namao_last_coords");
+    if (!raw) return null;
+    const arr = JSON.parse(raw);
+    if (Array.isArray(arr) && arr.length === 2 && arr.every(Number.isFinite)) return arr;
+  } catch { /* ignore */ }
+  return null;
+}
+
 function renderAvailableOrderCard(o) {
   const earning = (o.price * DRIVER_SHARE).toFixed(2).replace(".", ",");
   const itemIcon = {
@@ -319,21 +483,51 @@ function renderAvailableOrderCard(o) {
     Documentos: "fa-file-alt",
     Caixas: "fa-box-open"
   }[o.itemType] || "fa-cube";
-  const km = o.distanceKm ? `${Number(o.distanceKm).toFixed(1)} km` : "";
+
+  const rideKm = o.distanceKm ? Number(o.distanceKm).toFixed(1) : null;
+
+  // Distância do motorista até a origem (pickup)
+  const driverPos = getDriverPosition();
+  const pickupKm =
+    driverPos && o.originCoords?.length === 2
+      ? haversineKm(driverPos, o.originCoords)
+      : null;
+  const pickupLabel = pickupKm != null ? `${pickupKm.toFixed(1)} km` : null;
+
+  // R$/km da corrida — ajuda motorista decidir se vale a pena
+  const rsPerKm = rideKm && Number(rideKm) > 0
+    ? (o.price * DRIVER_SHARE / Number(rideKm)).toFixed(2).replace(".", ",")
+    : null;
+
   return `
-    <div class="card-primary-gradient p-5">
-      <div class="flex justify-between items-start mb-3">
-        <span class="bg-accent text-primary text-xs font-black px-3 py-1.5 rounded-full uppercase flex items-center gap-1">
-          <i class="fa-solid ${itemIcon}"></i> ${o.itemType || "Item"} · ${o.veh}${km ? ` · ${km}` : ""}
-        </span>
-        <p class="text-3xl font-black text-accent">R$ ${earning}</p>
+    <div class="bg-white rounded-2xl p-4 shadow-md border border-gray-100 active:scale-[0.99] transition">
+      <div class="flex justify-between items-start mb-2">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="bg-accent/15 text-primary text-[10px] font-black px-2 py-0.5 rounded-full uppercase flex items-center gap-1 whitespace-nowrap">
+              <i class="fa-solid ${itemIcon}"></i> ${o.itemType || "Item"}
+            </span>
+            <span class="bg-primary/10 text-primary text-[10px] font-black px-2 py-0.5 rounded-full uppercase whitespace-nowrap">${o.veh || "Moto"}</span>
+          </div>
+        </div>
+        <div class="text-right pl-2">
+          <p class="text-2xl font-black text-primary leading-none">R$&nbsp;${earning}</p>
+          ${rsPerKm ? `<p class="text-[10px] font-bold text-gray-400 mt-0.5">R$ ${rsPerKm}/km</p>` : ""}
+        </div>
       </div>
-      <div class="text-sm font-bold space-y-2 mb-4">
-        <p><i class="fa-solid fa-location-dot text-accent w-5"></i> ${o.origin || "—"}</p>
-        <p><i class="fa-solid fa-flag-checkered text-accent w-5"></i> ${o.destination || "—"}</p>
+
+      <div class="flex items-center gap-2 text-[11px] font-black uppercase tracking-wider mb-2.5">
+        ${pickupLabel ? `<span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full"><i class="fa-solid fa-person-walking-arrow-right"></i> ${pickupLabel} até origem</span>` : ""}
+        ${rideKm ? `<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full"><i class="fa-solid fa-route"></i> ${rideKm} km corrida</span>` : ""}
       </div>
-      <button onclick="window.acceptOrderFromUI('${o.id}')" class="btn-accent w-full uppercase tracking-widest text-base">
-        <i class="fa-solid fa-bolt"></i> ACEITAR ENTREGA
+
+      <div class="text-[13px] font-semibold space-y-1 mb-3 text-gray-700 leading-tight">
+        <p class="truncate"><i class="fa-solid fa-location-dot text-success w-4"></i> <b class="text-primary">De:</b> ${o.origin || "—"}</p>
+        <p class="truncate"><i class="fa-solid fa-flag-checkered text-danger w-4"></i> <b class="text-primary">Para:</b> ${o.destination || "—"}</p>
+      </div>
+
+      <button onclick="window.acceptOrderFromUI('${o.id}')" class="btn-accent w-full uppercase tracking-widest text-sm py-3">
+        <i class="fa-solid fa-bolt"></i> ACEITAR — R$&nbsp;${earning}
       </button>
     </div>`;
 }
@@ -343,29 +537,60 @@ function renderActiveDelivery(o) {
   const isInTransit = o.status === "in_transit";
   const km = o.distanceKm ? `${Number(o.distanceKm).toFixed(1)} km` : "";
 
-  // botão "Abrir no Maps" (Google Maps app)
-  const dest = o.destCoords;
-  const orig = o.originCoords;
-  const target = isInTransit ? dest : orig;
-  const mapsBtn = (target?.length === 2)
-    ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${target[0]},${target[1]}&travelmode=driving" target="_blank" class="block w-full text-center mt-2 py-3 bg-white text-primary font-extrabold uppercase text-sm tracking-widest rounded-2xl border-2 border-accent active:scale-[0.98] transition"><i class="fa-solid fa-route text-accentDark mr-1"></i> Abrir no Google Maps</a>`
-    : "";
+  // Navegação: origem se ainda não coletou, destino se já em trânsito
+  const target = isInTransit ? o.destCoords : o.originCoords;
+  const targetAddr = isInTransit ? (o.destination || "destino") : (o.origin || "origem");
+  const navLabel = isInTransit ? "IR PRO DESTINO" : "IR PRA ORIGEM";
+  const navBtn = (target?.length === 2)
+    ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${target[0]},${target[1]}&travelmode=driving" target="_blank" class="block w-full text-center py-4 bg-accent text-primary font-black uppercase text-base tracking-widest rounded-2xl shadow-lg active:scale-[0.98] transition mb-2"><i class="fa-solid fa-route mr-2"></i> ${navLabel} (GOOGLE MAPS)</a>`
+    : `<div class="w-full text-center py-3 bg-white/10 text-white/60 font-bold text-sm rounded-2xl mb-2"><i class="fa-solid fa-map-location-dot"></i> Navegue até: ${targetAddr}</div>`;
 
   return `
     <div class="card-primary-gradient p-5">
       <p class="text-xs font-black text-accent uppercase tracking-widest mb-3">
-        <i class="fa-solid fa-circle-dot fa-beat-fade"></i> Entrega em andamento — R$ ${earning}${km ? ` · ${km}` : ""}
+        <i class="fa-solid fa-circle-dot fa-beat-fade"></i> ${isInTransit ? "Em trânsito" : "Coleta em andamento"} — R$ ${earning}${km ? ` · ${km}` : ""}
       </p>
-      <div class="text-sm font-bold space-y-2 mb-4">
-        <p><i class="fa-solid fa-location-dot text-accent w-5"></i> ${o.origin || "—"}</p>
-        <p><i class="fa-solid fa-flag-checkered text-accent w-5"></i> ${o.destination || "—"}</p>
+      <div class="text-sm font-bold space-y-2 mb-4 text-white">
+        <p><i class="fa-solid fa-location-dot text-accent w-5"></i> <b>De:</b> ${o.origin || "—"}</p>
+        <p><i class="fa-solid fa-flag-checkered text-accent w-5"></i> <b>Para:</b> ${o.destination || "—"}</p>
       </div>
+
+      ${navBtn}
+
       ${
         isInTransit
-          ? `<button onclick="window.openPODFromUI('${o.id}')" class="btn-success w-full uppercase tracking-widest text-base"><i class="fa-solid fa-camera"></i> FINALIZAR (POD)</button>`
-          : `<button onclick="window.openPickupPhoto('${o.id}')" class="btn-accent w-full uppercase tracking-widest text-base"><i class="fa-solid fa-camera"></i> CONFIRMAR COLETA (FOTO)</button>`
+          ? `
+            <div class="bg-white/10 border border-accent/40 rounded-2xl p-3 mb-3 text-xs text-white/90 leading-relaxed">
+              <p class="font-extrabold text-accent uppercase tracking-widest mb-1"><i class="fa-solid fa-circle-info"></i> Como finalizar</p>
+              <ol class="list-decimal list-inside space-y-0.5">
+                <li>Entregue o produto ao cliente</li>
+                <li>Peça pro cliente <b>assinar na tela</b></li>
+                <li>Tire <b>1 foto</b> do produto entregue</li>
+                <li>Toque em <b>CONFIRMAR ENTREGA</b> abaixo</li>
+              </ol>
+            </div>
+            <button onclick="window.openPODFromUI('${o.id}')" class="btn-success w-full uppercase tracking-widest text-base shadow-lg animate-pulse"><i class="fa-solid fa-signature"></i> CONFIRMAR ENTREGA (ASSINATURA + FOTO)</button>
+          `
+          : `
+            <div class="bg-white/10 border border-accent/40 rounded-2xl p-3 mb-3 text-xs text-white/90 leading-relaxed">
+              <p class="font-extrabold text-accent uppercase tracking-widest mb-1"><i class="fa-solid fa-circle-info"></i> Próximo passo</p>
+              <p>Toque no bot\u00e3o acima pra navegar at\u00e9 a origem. Ao chegar, colete o produto e tire uma foto pra comprovar.</p>
+            </div>
+            <button onclick="window.openPickupPhoto('${o.id}')" class="btn-accent w-full uppercase tracking-widest text-base"><i class="fa-solid fa-camera"></i> CONFIRMAR COLETA (FOTO)</button>
+          `
       }
-      ${mapsBtn}
+
+      <div class="mt-4 bg-white/5 border border-white/10 rounded-2xl p-3">
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-[11px] font-black text-accent uppercase tracking-widest"><i class="fa-solid fa-comments"></i> Chat com o cliente</p>
+          <span class="text-[10px] text-white/50">privado, só aqui</span>
+        </div>
+        <div id="chat-messages" class="bg-white/10 rounded-xl p-2 mb-2 max-h-40 overflow-y-auto flex flex-col gap-1.5"></div>
+        <div class="flex gap-2">
+          <input id="chat-input" type="text" maxlength="500" placeholder="Mensagem…" class="flex-1 bg-white/95 text-primary text-sm px-3 py-2 rounded-xl outline-none" onkeydown="if(event.key==='Enter'){event.preventDefault();window.sendChatFromUI();}" />
+          <button onclick="window.sendChatFromUI()" class="bg-accent text-primary font-black text-xs uppercase tracking-wider px-3 py-2 rounded-xl">Enviar</button>
+        </div>
+      </div>
     </div>`;
 }
 
@@ -378,10 +603,87 @@ function syncActiveDeliveryOnMap() {
     if (myActive.id !== lastActiveOrderId) {
       lastActiveOrderId = myActive.id;
       showActiveDelivery(myActive);
+      subscribeChat(myActive.id);
     }
   } else if (lastActiveOrderId) {
     lastActiveOrderId = null;
     clearActiveDelivery();
+    unsubscribeChat();
+  }
+}
+
+function subscribeChat(orderId) {
+  unsubscribeChat();
+  chatMessages = [];
+  chatLastMsgCount = 0;
+  unsubMessages = subscribeMessages(orderId, (msgs) => {
+    chatMessages = msgs;
+    // Beep curto quando chega mensagem nova do cliente
+    if (msgs.length > chatLastMsgCount) {
+      const last = msgs[msgs.length - 1];
+      if (last && last.from === "customer" && chatLastMsgCount > 0) {
+        try {
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          const ctx = new Ctx();
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.frequency.value = 760;
+          g.gain.setValueAtTime(0.0001, ctx.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
+          o.connect(g).connect(ctx.destination);
+          o.start();
+          o.stop(ctx.currentTime + 0.28);
+          if (navigator.vibrate) navigator.vibrate([60, 30, 60]);
+        } catch { /* ignore */ }
+      }
+    }
+    chatLastMsgCount = msgs.length;
+    renderChatPanel();
+  });
+}
+
+function unsubscribeChat() {
+  if (unsubMessages) { unsubMessages(); unsubMessages = null; }
+  chatMessages = [];
+  chatLastMsgCount = 0;
+}
+
+function renderChatPanel() {
+  const list = document.getElementById("chat-messages");
+  if (!list) return;
+  if (chatMessages.length === 0) {
+    list.innerHTML = `<p class="text-xs text-white/60 text-center py-2">Nenhuma mensagem ainda. Mande um oi pro cliente 👋</p>`;
+    return;
+  }
+  list.innerHTML = chatMessages.map((m) => {
+    const mine = m.from === "driver";
+    const hhmm = new Date(m.at || Date.now()).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const text = String(m.text || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return `
+      <div class="flex ${mine ? "justify-end" : "justify-start"}">
+        <div class="max-w-[85%] rounded-2xl px-3 py-1.5 text-sm ${mine ? "bg-accent text-primary rounded-br-sm font-bold" : "bg-white/90 text-primary rounded-bl-sm"}">
+          <div class="whitespace-pre-wrap break-words">${text}</div>
+          <div class="text-[10px] ${mine ? "text-primary/70" : "text-primary/60"} mt-0.5">${hhmm}</div>
+        </div>
+      </div>`;
+  }).join("");
+  list.scrollTop = list.scrollHeight;
+}
+
+async function sendChatFromUI() {
+  if (!lastActiveOrderId) return;
+  const input = document.getElementById("chat-input");
+  if (!input) return;
+  const text = (input.value || "").trim();
+  if (!text) return;
+  input.value = "";
+  try {
+    await sendMessage(lastActiveOrderId, "driver", text);
+  } catch (err) {
+    console.warn("[chat] send failed:", err);
+    showToast("Erro ao enviar mensagem.");
+    input.value = text; // restore
   }
 }
 
@@ -565,8 +867,36 @@ Object.assign(window, {
     showToast(`Saldo atual: R$ ${balance}. Solicitação de saque registrada.`);
   },
   openWhatsAppSupport: () => window.open(`https://wa.me/${SUPPORT_WHATSAPP}`, "_blank"),
-  centerDriverMap,
   testNewOrderSound,
+  toggleNotifyOnNewOrder: async () => {
+    if (!currentUser) return;
+    const next = driverProfile?.notifyOnNewOrder === false; // se estava off, vira on
+    // Update visual otimistico (sem esperar Firestore confirmar)
+    const btn = document.getElementById("notify-toggle");
+    if (btn) {
+      btn.setAttribute("aria-pressed", String(next));
+      btn.querySelector(".theme-toggle-thumb")?.classList.toggle("on", next);
+    }
+    try {
+      await setNotifyOnNewOrder(currentUser.uid, next);
+      showToast(next ? "Notificações ativadas." : "Notificações desativadas.");
+    } catch (err) {
+      console.warn("[notify] toggle failed:", err);
+      showToast("Erro ao salvar preferência.");
+      // rollback
+      if (btn) {
+        btn.setAttribute("aria-pressed", String(!next));
+        btn.querySelector(".theme-toggle-thumb")?.classList.toggle("on", !next);
+      }
+    }
+  },
+  centerDriverMap,
   toggleTheme,
-  updateFileLabel
+  updateFileLabel,
+  sendChatFromUI,
+  toggleDriverOnline: toggleDriverOnlineImpl,
+  openDocPreview,
+  closeDocPreview,
+  requestAppPermission,
+  refreshPermissionStatuses,
 });

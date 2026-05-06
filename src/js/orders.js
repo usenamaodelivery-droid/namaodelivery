@@ -8,6 +8,7 @@ import {
   query,
   where,
   orderBy,
+  limit,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { db } from "./firebaseInit.js";
@@ -140,6 +141,33 @@ export function subscribeOrders(cb) {
     snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
     list.sort((a, b) => b.createdAt - a.createdAt);
     cb(list);
+  });
+}
+
+/* ---------------- Chat interno cliente ↔ motorista ---------------- */
+
+const messagesCol = (orderId) =>
+  collection(db, "artifacts", APP_ID, "public", "data", "orders", orderId, "messages");
+
+/** Subscreve mensagens do pedido em ordem cronológica. Retorna unsubscribe. */
+export function subscribeMessages(orderId, cb) {
+  const q = query(messagesCol(orderId), orderBy("at", "asc"), limit(200));
+  return onSnapshot(q, (snap) => {
+    const list = [];
+    snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
+    cb(list);
+  });
+}
+
+/** Envia mensagem no chat do pedido. `from` = "customer" | "driver". */
+export async function sendMessage(orderId, from, text) {
+  const body = (text || "").trim().slice(0, 500);
+  if (!body) return null;
+  return addDoc(messagesCol(orderId), {
+    orderId,
+    from,
+    text: body,
+    at: Date.now()
   });
 }
 

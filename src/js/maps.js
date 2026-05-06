@@ -15,7 +15,26 @@ let destMarker = null;
 let routeLine = null;
 let lastUserCoords = null;
 
-export let startCoords = [-23.55, -46.63]; // SP fallback (até GPS pegar)
+// Recupera última localização conhecida do localStorage. Faz o mapa
+// abrir imediatamente perto do motorista, sem esperar o GPS responder.
+function readCachedCoords() {
+  try {
+    const raw = localStorage.getItem("namao_last_coords");
+    if (!raw) return null;
+    const arr = JSON.parse(raw);
+    if (Array.isArray(arr) && arr.length === 2 && arr.every(Number.isFinite)) {
+      return arr;
+    }
+  } catch {}
+  return null;
+}
+
+function saveCoordsToCache(coords) {
+  try { localStorage.setItem("namao_last_coords", JSON.stringify(coords)); } catch {}
+}
+
+const cachedStart = readCachedCoords();
+export let startCoords = cachedStart || [-23.55, -46.63]; // último conhecido ou SP fallback
 export let destCoords = null;
 
 // SVG icons custom (motoboy + pin origem + pin destino)
@@ -79,9 +98,17 @@ export function initDriverMap() {
   // Pequeno controle de zoom no canto inferior esquerdo
   L.control.zoom({ position: "bottomleft" }).addTo(mapDriver);
 
+  // Coloca já o marker no último conhecido pra dar feedback imediato
+  if (cachedStart) {
+    lastUserCoords = cachedStart;
+    placeDriverMarker(cachedStart);
+    mapDriver.setView(cachedStart, 14);
+  }
+
   locateUser((coords) => {
     startCoords = coords;
     lastUserCoords = coords;
+    saveCoordsToCache(coords);
     mapDriver.setView(coords, 15);
     placeDriverMarker(coords);
   });
@@ -108,6 +135,7 @@ function locateUser(cb) {
 /** Atualiza posição do entregador no mapa (chamado pelo tracker GPS). */
 export function updateDriverPosition(lat, lng) {
   lastUserCoords = [lat, lng];
+  saveCoordsToCache(lastUserCoords);
   if (!mapDriver) return;
   placeDriverMarker(lastUserCoords);
 }
