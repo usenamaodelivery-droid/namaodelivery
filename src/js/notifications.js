@@ -51,25 +51,66 @@ async function playSound(times = 1) {
   }
 }
 
+let fcmListenersBound = false;
+let fcmTokenCb = null;
+
+/**
+ * Registra callback que recebe o FCM token assim que o Capacitor entregar
+ * (depois de checkPermissions/register). O callback é chamado uma única
+ * vez por sessão.
+ */
+export function onFcmToken(cb) { fcmTokenCb = cb; }
+
+function bindFcmListeners() {
+  if (fcmListenersBound) return;
+  const Caps = window.Capacitor;
+  const PN = Caps?.Plugins?.PushNotifications;
+  if (!PN) return;
+  fcmListenersBound = true;
+  PN.addListener("registration", (token) => {
+    const value = token?.value || token;
+    if (typeof value === "string" && value.length > 10 && fcmTokenCb) {
+      try { fcmTokenCb(value); } catch (err) { console.warn("[fcm] token cb threw:", err); }
+    }
+  });
+  PN.addListener("registrationError", (err) => {
+    console.warn("[fcm] registrationError:", err);
+  });
+  PN.addListener("pushNotificationReceived", (notif) => {
+    // App em foreground — toca som local pra reforçar
+    notifyNewOrder({
+      id: notif?.data?.orderId,
+      priceCents: notif?.data?.price ? Math.round(parseFloat(notif.data.price) * 100) : undefined,
+      distanceKm: notif?.data?.distanceKm ? parseFloat(notif.data.distanceKm) : undefined,
+    });
+  });
+}
+
 /**
  * Pede permissão de notificação no primeiro uso (quando o motorista
  * vai ficar online). Funciona no Capacitor e no browser.
+ *
+ * No Capacitor, registra o device pra receber FCM e dispara onFcmToken().
  */
 export async function requestNotificationPermission() {
   // Browser Notification API
   if ("Notification" in window && Notification.permission === "default") {
     try { await Notification.requestPermission(); } catch { /* ignore */ }
   }
-  // Capacitor PushNotifications (se existir)
+  // Capacitor PushNotifications (FCM nativo)
   try {
     const Caps = window.Capacitor;
-    if (Caps?.Plugins?.PushNotifications) {
-      const perm = await Caps.Plugins.PushNotifications.checkPermissions();
-      if (perm.receive !== "granted") {
-        await Caps.Plugins.PushNotifications.requestPermissions();
-      }
+    const PN = Caps?.Plugins?.PushNotifications;
+    if (!PN) return;
+    bindFcmListeners();
+    let perm = await PN.checkPermissions();
+    if (perm.receive !== "granted") {
+      perm = await PN.requestPermissions();
     }
-  } catch { /* ignore */ }
+    if (perm.receive === "granted") {
+      await PN.register(); // dispara o listener "registration" com o token
+    }
+  } catch (err) { console.warn("[fcm] requestPermission failed:", err); }
 }
 
 /**
