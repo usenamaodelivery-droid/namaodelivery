@@ -2,6 +2,8 @@
 <resources>
     <string name="app_name">Delivery NaMão</string>
     <string name="title_activity_main">Delivery NaMão</string>
+    <!-- Short label forces Samsung/Pixel launchers to wrap in 2 lines -->
+    <string name="app_launcher_name">Delivery\nNaMão</string>
     <string name="package_name">com.namao.delivery</string>
     <string name="custom_url_scheme">com.namao.delivery</string>
 </resources>

@@ -4,6 +4,7 @@
 import { onAuth, handleAuth, signOutUser } from "./auth.js";
 import { showToast, switchView, hideSplash, updateFileLabel } from "./ui.js";
 import { initTheme, toggleTheme } from "./theme.js";
+import { refreshPermissionStatuses, requestAppPermission } from "./permissions.js";
 import {
   processOrderUpdate as processNewOrderAlert,
   requestNotificationPermission,
@@ -143,11 +144,12 @@ function applyDriverProfile() {
 
   if (notifyToggle) {
     const enabled = driverProfile?.notifyOnNewOrder !== false;
-    notifyToggle.classList.toggle("active", enabled);
     notifyToggle.setAttribute("aria-pressed", String(enabled));
+    notifyToggle.querySelector(".theme-toggle-thumb")?.classList.toggle("on", enabled);
   }
 
   applyDriverDocs(driverProfile);
+  applyDriverAvatar(driverProfile);
 
   if (!driverProfile) {
     overlay?.classList.add("hidden");
@@ -385,6 +387,21 @@ function toggleDriverOnlineImpl() {
   showToast(driverOnline ? "Você está ONLINE — recebendo corridas." : "Você está OFFLINE — não recebe novas corridas.");
 }
 
+function applyDriverAvatar(profile) {
+  const img = document.getElementById("profile-avatar-img");
+  const fb = document.getElementById("profile-avatar-fallback");
+  if (!img || !fb) return;
+  const selfie = profile?.selfiePhoto;
+  if (selfie) {
+    img.src = selfie;
+    img.classList.remove("hidden");
+    fb.classList.add("hidden");
+  } else {
+    img.classList.add("hidden");
+    fb.classList.remove("hidden");
+  }
+}
+
 function applyDriverDocs(profile) {
   const card = document.getElementById("driver-docs-card");
   if (!card) return;
@@ -478,8 +495,25 @@ function renderActiveDelivery(o) {
       </div>
       ${
         isInTransit
-          ? `<button onclick="window.openPODFromUI('${o.id}')" class="btn-success w-full uppercase tracking-widest text-base"><i class="fa-solid fa-camera"></i> FINALIZAR (POD)</button>`
-          : `<button onclick="window.openPickupPhoto('${o.id}')" class="btn-accent w-full uppercase tracking-widest text-base"><i class="fa-solid fa-camera"></i> CONFIRMAR COLETA (FOTO)</button>`
+          ? `
+            <div class="bg-white/10 border border-accent/40 rounded-2xl p-3 mb-3 text-xs text-white/90 leading-relaxed">
+              <p class="font-extrabold text-accent uppercase tracking-widest mb-1"><i class="fa-solid fa-circle-info"></i> Como finalizar</p>
+              <ol class="list-decimal list-inside space-y-0.5">
+                <li>Entregue o produto ao cliente</li>
+                <li>Peça para o cliente <b>assinar na tela</b></li>
+                <li>Tire <b>1 foto</b> do produto entregue</li>
+                <li>Toque em <b>CONFIRMAR ENTREGA</b> abaixo</li>
+              </ol>
+            </div>
+            <button onclick="window.openPODFromUI('${o.id}')" class="btn-success w-full uppercase tracking-widest text-base shadow-lg animate-pulse"><i class="fa-solid fa-signature"></i> CONFIRMAR ENTREGA (ASSINATURA + FOTO)</button>
+          `
+          : `
+            <div class="bg-white/10 border border-accent/40 rounded-2xl p-3 mb-3 text-xs text-white/90 leading-relaxed">
+              <p class="font-extrabold text-accent uppercase tracking-widest mb-1"><i class="fa-solid fa-circle-info"></i> Pr\u00f3ximo passo</p>
+              <p>V\u00e1 at\u00e9 a <b>origem</b>, colete o produto e tire uma foto pra comprovar a retirada.</p>
+            </div>
+            <button onclick="window.openPickupPhoto('${o.id}')" class="btn-accent w-full uppercase tracking-widest text-base"><i class="fa-solid fa-camera"></i> CONFIRMAR COLETA (FOTO)</button>
+          `
       }
       ${mapsBtn}
     </div>`;
@@ -685,12 +719,23 @@ Object.assign(window, {
   toggleNotifyOnNewOrder: async () => {
     if (!currentUser) return;
     const next = driverProfile?.notifyOnNewOrder === false; // se estava off, vira on
+    // Update visual otimistico (sem esperar Firestore confirmar)
+    const btn = document.getElementById("notify-toggle");
+    if (btn) {
+      btn.setAttribute("aria-pressed", String(next));
+      btn.querySelector(".theme-toggle-thumb")?.classList.toggle("on", next);
+    }
     try {
       await setNotifyOnNewOrder(currentUser.uid, next);
       showToast(next ? "Notificações ativadas." : "Notificações desativadas.");
     } catch (err) {
       console.warn("[notify] toggle failed:", err);
       showToast("Erro ao salvar preferência.");
+      // rollback
+      if (btn) {
+        btn.setAttribute("aria-pressed", String(!next));
+        btn.querySelector(".theme-toggle-thumb")?.classList.toggle("on", !next);
+      }
     }
   },
   centerDriverMap,
@@ -699,4 +744,6 @@ Object.assign(window, {
   toggleDriverOnline: toggleDriverOnlineImpl,
   openDocPreview,
   closeDocPreview,
+  requestAppPermission,
+  refreshPermissionStatuses,
 });

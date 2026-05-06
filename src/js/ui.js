@@ -42,6 +42,7 @@ export function switchView(view) {
     document.getElementById("view-atividade")?.classList.remove("hidden");
   } else if (view === "perfil") {
     document.getElementById("view-perfil")?.classList.remove("hidden");
+    try { window.refreshPermissionStatuses?.(); } catch { /* ignore */ }
   } else if (view === "admin") {
     document.getElementById("view-admin")?.classList.remove("hidden");
     document.getElementById("bottom-nav")?.classList.add("hidden");

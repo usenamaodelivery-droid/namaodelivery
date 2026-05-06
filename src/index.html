@@ -99,7 +99,7 @@
                     <div id="map-entregador" class="w-full h-full"></div>
 
                     <!-- HUD: toggle online + ganhos do dia (sobreposto no mapa) -->
-                    <div class="absolute top-3 left-3 right-3 z-20 flex justify-between items-start gap-2">
+                    <div class="absolute top-3 left-3 right-3 flex justify-between items-start gap-2" style="z-index: 1000;">
                         <button id="online-toggle" type="button" onclick="toggleDriverOnline()" aria-pressed="true"
                             class="online-btn bg-white/95 backdrop-blur px-3 py-2 rounded-2xl shadow-lg border border-white/40 flex items-center gap-2 active:scale-[0.97] transition">
                             <span id="online-dot" class="w-2.5 h-2.5 bg-green-500 rounded-full shadow-[0_0_8px_#22c55e] animate-pulse"></span>
@@ -113,7 +113,7 @@
                     </div>
 
                     <!-- Botão de centralizar na minha localização -->
-                    <div class="absolute bottom-4 right-4 z-10">
+                    <div class="absolute bottom-4 right-4" style="z-index: 1000;">
                         <button onclick="centerDriverMap()" aria-label="Centralizar na minha localização" class="bg-white p-3 rounded-full shadow-xl border border-gray-100 text-primary hover:bg-gray-50 transition transform active:scale-95">
                             <i class="fa-solid fa-location-crosshairs text-xl"></i>
                         </button>
@@ -165,6 +165,19 @@
                         <p class="text-tiny font-bold text-gray-500"><span id="stats-total-count">0</span> · <span id="stats-total-km">0 km</span></p>
                     </div>
                 </div>
+                <!-- Card explicativo do fluxo POD -->
+                <div class="mx-4 mt-4 bg-white border-2 border-accent/30 rounded-2xl p-4 shadow-sm">
+                    <div class="flex items-center gap-2 mb-2">
+                        <i class="fa-solid fa-circle-info text-accent text-lg"></i>
+                        <h3 class="text-sm font-extrabold text-primary uppercase tracking-wider">Como funciona uma corrida</h3>
+                    </div>
+                    <ol class="text-sm text-gray-700 space-y-1.5 pl-1">
+                        <li><span class="font-black text-accent">1.</span> Aceite a corrida no <b>Mural</b></li>
+                        <li><span class="font-black text-accent">2.</span> Vá até a <b>origem</b> e tire foto da coleta</li>
+                        <li><span class="font-black text-accent">3.</span> Entregue ao cliente, colha <b>assinatura + foto</b></li>
+                        <li><span class="font-black text-accent">4.</span> Toque em <b>"CONFIRMAR ENTREGA"</b> — pagamento vai pra carteira</li>
+                    </ol>
+                </div>
                 <div class="p-4">
                     <h3 class="text-xs font-extrabold text-gray-500 uppercase tracking-widest mb-3 px-1">Pedidos recentes</h3>
                     <div id="driver-history-list" class="space-y-3"></div>
@@ -174,8 +187,9 @@
             <!-- VIEW: PERFIL -->
             <main id="view-perfil" class="absolute inset-0 overflow-y-auto bg-gray-50 no-scrollbar hidden fade-in pb-24">
                 <div class="p-6 card-primary-gradient text-white text-center shadow-md relative" style="border-radius: 0 0 28px 28px;">
-                    <div class="w-24 h-24 bg-white text-primary rounded-full mx-auto mb-3 flex items-center justify-center text-4xl border-4 border-accent shadow-lg">
-                        <i class="fa-solid fa-user"></i>
+                    <div class="w-24 h-24 mx-auto mb-3 rounded-full overflow-hidden flex items-center justify-center border-4 border-accent shadow-lg bg-white text-primary text-4xl">
+                        <img id="profile-avatar-img" alt="" class="w-full h-full object-cover hidden" />
+                        <i id="profile-avatar-fallback" class="fa-solid fa-user"></i>
                     </div>
                     <h2 id="profile-display-name" class="text-2xl font-extrabold">Entregador</h2>
                     <p id="profile-status" class="text-accent text-base font-bold mt-1">Status: <span class="font-black">Aguardando cadastro</span></p>
@@ -254,6 +268,34 @@
                         </div>
                     </div>
 
+                    <!-- Permissões do app -->
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
+                        <h3 class="text-sm font-extrabold text-gray-500 mb-1 uppercase tracking-wider">Permissões</h3>
+                        <p class="text-xs text-gray-400 mb-4">Necessárias para receber e entregar corridas.</p>
+
+                        <div class="-mx-2 px-2 py-3 flex justify-between items-center cursor-pointer" onclick="requestAppPermission('notifications')">
+                            <span class="flex items-center gap-3 text-primary text-base font-bold">
+                                <i class="fa-solid fa-bell text-primary text-xl w-6"></i>
+                                Notificações
+                            </span>
+                            <span id="perm-notifications-status" class="text-xs font-extrabold uppercase tracking-wider px-3 py-1 rounded-full bg-gray-100 text-gray-500">VERIFICAR</span>
+                        </div>
+                        <div class="border-t border-gray-100 -mx-2 px-2 py-3 flex justify-between items-center cursor-pointer" onclick="requestAppPermission('location')">
+                            <span class="flex items-center gap-3 text-primary text-base font-bold">
+                                <i class="fa-solid fa-location-dot text-primary text-xl w-6"></i>
+                                Localização (GPS)
+                            </span>
+                            <span id="perm-location-status" class="text-xs font-extrabold uppercase tracking-wider px-3 py-1 rounded-full bg-gray-100 text-gray-500">VERIFICAR</span>
+                        </div>
+                        <div class="border-t border-gray-100 -mx-2 px-2 py-3 flex justify-between items-center cursor-pointer" onclick="requestAppPermission('camera')">
+                            <span class="flex items-center gap-3 text-primary text-base font-bold">
+                                <i class="fa-solid fa-camera text-primary text-xl w-6"></i>
+                                Câmera &amp; Fotos
+                            </span>
+                            <span id="perm-camera-status" class="text-xs font-extrabold uppercase tracking-wider px-3 py-1 rounded-full bg-gray-100 text-gray-500">VERIFICAR</span>
+                        </div>
+                    </div>
+
                     <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
                         <h3 class="text-sm font-extrabold text-gray-500 mb-4 uppercase tracking-wider">Conta</h3>
                         <ul class="space-y-1">
@@ -264,7 +306,7 @@
                     <button onclick="signOutUser()" class="w-full bg-red-50 text-danger font-extrabold py-4 rounded-2xl shadow-sm border-2 border-red-200 hover:bg-red-100 transition text-base">
                         <i class="fa-solid fa-right-from-bracket mr-2"></i> Sair da Conta
                     </button>
-                    <p class="text-center text-xs text-gray-400 mt-2 font-semibold">Delivery NaMão v1.5.3 · App do Entregador</p>
+                    <p class="text-center text-xs text-gray-400 mt-2 font-semibold">Delivery NaMão v1.5.4 · App do Entregador</p>
                 </div>
             </main>
 
