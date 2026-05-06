@@ -1,0 +1,619 @@
+From 994e7b4e569e3e060e2ce4664309456bf5b3f5f4 Mon Sep 17 00:00:00 2001
+From: usenamaodelivery <usenamaodelivery@gmail.com>
+Date: Wed, 6 May 2026 15:48:07 +0000
+Subject: [PATCH 1/2] =?UTF-8?q?rebrand:=20NaM=C3=A3o=20Delivery=20?=
+ =?UTF-8?q?=E2=86=92=20Delivery=20NaM=C3=A3o=20(consistent=20naming)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Co-Authored-By: Devin AI <158243242+devin-ai-integration[bot]@users.noreply.github.com>
+---
+ integration/NamaoDeliveryButton.tsx  | 2 +-
+ integration/SolicitarEntrega.tsx     | 2 +-
+ integration/solicitar-entrega.html   | 2 +-
+ src/app/api/quote/by-cep/route.ts    | 2 +-
+ src/app/api/quote/by-coords/route.ts | 4 ++--
+ src/app/api/quote/route.ts           | 2 +-
+ src/app/layout.tsx                   | 6 +++---
+ src/app/manifest.ts                  | 2 +-
+ src/app/page.tsx                     | 2 +-
+ src/lib/distance.ts                  | 2 +-
+ src/lib/store.ts                     | 2 +-
+ 11 files changed, 14 insertions(+), 14 deletions(-)
+
+diff --git a/integration/NamaoDeliveryButton.tsx b/integration/NamaoDeliveryButton.tsx
+index 7c23fd9..d35bb4f 100644
+--- a/integration/NamaoDeliveryButton.tsx
++++ b/integration/NamaoDeliveryButton.tsx
+@@ -160,7 +160,7 @@ export function NamaoDeliveryButton({
+             </button>
+ 
+             <div className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#C9A84C]">
+-              NaMão Delivery
++              Delivery NaMão
+             </div>
+             <h3 className="mt-1 text-xl font-extrabold text-[#1b1f34]">
+               Calcular entrega
+diff --git a/integration/SolicitarEntrega.tsx b/integration/SolicitarEntrega.tsx
+index a72f45b..7172e10 100644
+--- a/integration/SolicitarEntrega.tsx
++++ b/integration/SolicitarEntrega.tsx
+@@ -109,7 +109,7 @@ export function SolicitarEntrega({
+           <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md p-6 shadow-2xl">
+             <div className="flex items-start justify-between mb-3">
+               <div>
+-                <div className="text-xs font-black uppercase tracking-widest text-[#BE9320]">NaMão Delivery</div>
++                <div className="text-xs font-black uppercase tracking-widest text-[#BE9320]">Delivery NaMão</div>
+                 <h3 className="font-black text-xl text-[#1B304F] mt-1">Calcular entrega</h3>
+               </div>
+               <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none" aria-label="Fechar">×</button>
+diff --git a/integration/solicitar-entrega.html b/integration/solicitar-entrega.html
+index ef8dc55..88c8919 100644
+--- a/integration/solicitar-entrega.html
++++ b/integration/solicitar-entrega.html
+@@ -56,7 +56,7 @@ USAGE:
+     overlay.innerHTML = ''
+       + '<div class="namao-modal namao-modal-relative" role="dialog" aria-modal="true">'
+       +   '<button class="namao-close" aria-label="Fechar">&times;</button>'
+-      +   '<div class="namao-kicker">NaMão Delivery</div>'
++      +   '<div class="namao-kicker">Delivery NaMão</div>'
+       +   '<h3 class="namao-h">Calcular entrega</h3>'
+       +   '<p class="namao-info">Buscamos do CEP <b style="color:#1B304F">'+sellerCep+'</b> e entregamos onde você quiser.</p>'
+       +   '<label>'
+diff --git a/src/app/api/quote/by-cep/route.ts b/src/app/api/quote/by-cep/route.ts
+index 2e8438e..ea16a08 100644
+--- a/src/app/api/quote/by-cep/route.ts
++++ b/src/app/api/quote/by-cep/route.ts
+@@ -25,7 +25,7 @@ export async function POST(req: Request) {
+ 
+   if (route.distanceKm > MAX_DELIVERY_KM) {
+     return cors(NextResponse.json({
+-      error: `Fora da área de cobertura (~${Math.round(route.distanceKm)} km). NaMão Delivery atende até ${MAX_DELIVERY_KM} km.`,
++      error: `Fora da área de cobertura (~${Math.round(route.distanceKm)} km). Delivery NaMão atende até ${MAX_DELIVERY_KM} km.`,
+       code: 'OUT_OF_RANGE',
+       distanceKm: Number(route.distanceKm.toFixed(1)),
+     }, { status: 422 }));
+diff --git a/src/app/api/quote/by-coords/route.ts b/src/app/api/quote/by-coords/route.ts
+index cfd6950..7875ae8 100644
+--- a/src/app/api/quote/by-coords/route.ts
++++ b/src/app/api/quote/by-coords/route.ts
+@@ -47,10 +47,10 @@ export async function POST(req: Request) {
+     { lat: dest.lat, lng: dest.lng },
+   );
+ 
+-  // Hard radius cap: NaMão Delivery is local-only.
++  // Hard radius cap: Delivery NaMão is local-only.
+   if (route.distanceKm > MAX_DELIVERY_KM) {
+     return cors(NextResponse.json({
+-      error: `Fora da área de cobertura (~${Math.round(route.distanceKm)} km). NaMão Delivery atende até ${MAX_DELIVERY_KM} km.`,
++      error: `Fora da área de cobertura (~${Math.round(route.distanceKm)} km). Delivery NaMão atende até ${MAX_DELIVERY_KM} km.`,
+       code: 'OUT_OF_RANGE',
+       distanceKm: Number(route.distanceKm.toFixed(1)),
+     }, { status: 422 }));
+diff --git a/src/app/api/quote/route.ts b/src/app/api/quote/route.ts
+index 323e391..09ca204 100644
+--- a/src/app/api/quote/route.ts
++++ b/src/app/api/quote/route.ts
+@@ -10,7 +10,7 @@ export async function POST(req: Request) {
+ 
+   if (route.distanceKm > MAX_DELIVERY_KM) {
+     return NextResponse.json({
+-      error: `Fora da área de cobertura (~${Math.round(route.distanceKm)} km). NaMão Delivery atende até ${MAX_DELIVERY_KM} km.`,
++      error: `Fora da área de cobertura (~${Math.round(route.distanceKm)} km). Delivery NaMão atende até ${MAX_DELIVERY_KM} km.`,
+       code: 'OUT_OF_RANGE',
+       distanceKm: Number(route.distanceKm.toFixed(1)),
+     }, { status: 422 });
+diff --git a/src/app/layout.tsx b/src/app/layout.tsx
+index 43247b8..5c3528f 100644
+--- a/src/app/layout.tsx
++++ b/src/app/layout.tsx
+@@ -11,11 +11,11 @@ const inter = Inter({
+ 
+ export const metadata: Metadata = {
+   title: {
+-    default: 'NaMão Delivery — Entrega rápida, justa e segura',
+-    template: '%s | NaMão Delivery',
++    default: 'Delivery NaMão — Entrega rápida, justa e segura',
++    template: '%s | Delivery NaMão',
+   },
+   description: 'Solicite entrega em segundos. PIX direto, motorista verificado, prova de entrega com foto e assinatura.',
+-  applicationName: 'NaMão Delivery',
++  applicationName: 'Delivery NaMão',
+   appleWebApp: {
+     capable: true,
+     statusBarStyle: 'default',
+diff --git a/src/app/manifest.ts b/src/app/manifest.ts
+index 81d6980..9776c52 100644
+--- a/src/app/manifest.ts
++++ b/src/app/manifest.ts
+@@ -2,7 +2,7 @@ import type { MetadataRoute } from 'next';
+ 
+ export default function manifest(): MetadataRoute.Manifest {
+   return {
+-    name: 'NaMão Delivery',
++    name: 'Delivery NaMão',
+     short_name: 'NaMão',
+     description: 'Solicite uma entrega rápida em segundos. PIX direto, motorista verificado, prova de entrega.',
+     start_url: '/',
+diff --git a/src/app/page.tsx b/src/app/page.tsx
+index dd16885..c8af8ae 100644
+--- a/src/app/page.tsx
++++ b/src/app/page.tsx
+@@ -93,7 +93,7 @@ export default function HomePage() {
+       {/* Footer */}
+       <footer className="bg-[color:var(--color-ink)] text-gray-400 py-8 px-5">
+         <div className="max-w-5xl mx-auto text-sm flex flex-col md:flex-row justify-between gap-3">
+-          <div>© 2026 NaMão Delivery</div>
++          <div>© 2026 Delivery NaMão</div>
+           <div className="flex gap-4">
+             <a href="https://usenamao.com/privacidade" className="hover:text-[color:var(--color-gold)]">Privacidade</a>
+             <a href="https://usenamao.com/termos" className="hover:text-[color:var(--color-gold)]">Termos</a>
+diff --git a/src/lib/distance.ts b/src/lib/distance.ts
+index 588a944..e36e2f5 100644
+--- a/src/lib/distance.ts
++++ b/src/lib/distance.ts
+@@ -4,7 +4,7 @@
+  * Nominatim (OpenStreetMap) for geocoding constrained to Brazil. Distance is
+  * haversine × 1.35 unless GOOGLE_MAPS_API_KEY is set.
+  *
+- * Hard constraint: NaMão Delivery covers up to ~50 km. Anything past that is
++ * Hard constraint: Delivery NaMão covers up to ~50 km. Anything past that is
+  * refused at API level. Price is capped at R$ 250 to prevent runaway quotes
+  * if geocoding ever returns a wildly wrong coordinate.
+  */
+diff --git a/src/lib/store.ts b/src/lib/store.ts
+index 775e0c5..f084378 100644
+--- a/src/lib/store.ts
++++ b/src/lib/store.ts
+@@ -1,5 +1,5 @@
+ /**
+- * In-memory mock backend for the NaMão Delivery PWA.
++ * In-memory mock backend for the Delivery NaMão PWA.
+  *
+  * Replace these helpers with real fetches to the production API
+  * (e.g. `process.env.NAMAO_API_URL`) when the backend endpoints are ready.
+-- 
+2.34.1
+
+
+From 4e0c1be4a434a7017e73a8fe6ac5ee2b3e5c7bc4 Mon Sep 17 00:00:00 2001
+From: usenamaodelivery <usenamaodelivery@gmail.com>
+Date: Wed, 6 May 2026 16:29:25 +0000
+Subject: [PATCH 2/2] feat(orders): plug PWA into production Firestore
+ (namao-delivery-prod)
+
+- Adds firebase-admin SDK
+- New src/lib/firestore.ts (admin SDK init from FIREBASE_SERVICE_ACCOUNT_JSON env)
+- New src/lib/orderStore.ts: same surface as store.ts but writes to Firestore
+  when configured (falls back to mock for local dev)
+- New src/lib/orderMapper.ts: schema mapping PWA <-> driver app
+  - PWA awaiting_payment <-> driver waiting_confirmation
+  - PWA searching       <-> driver pending
+  - PWA accepted/picking_up <-> driver accepted
+  - PWA in_transit      <-> driver in_transit
+  - PWA delivered       <-> driver completed
+- API routes /api/orders, /api/orders/[id], /api/orders/[id]/confirm-pix
+  now use orderStore (real Firestore in prod)
+- typecheck + build OK
+
+Co-Authored-By: Devin AI <158243242+devin-ai-integration[bot]@users.noreply.github.com>
+---
+ package.json                                 |   1 +
+ src/app/api/orders/[id]/confirm-pix/route.ts |   6 +-
+ src/app/api/orders/[id]/route.ts             |   4 +-
+ src/app/api/orders/route.ts                  |   4 +-
+ src/lib/firestore.ts                         |  62 +++++++
+ src/lib/orderMapper.ts                       | 167 +++++++++++++++++++
+ src/lib/orderStore.ts                        |  85 ++++++++++
+ 7 files changed, 322 insertions(+), 7 deletions(-)
+ create mode 100644 src/lib/firestore.ts
+ create mode 100644 src/lib/orderMapper.ts
+ create mode 100644 src/lib/orderStore.ts
+
+diff --git a/package.json b/package.json
+index a799a5a..65241c0 100644
+--- a/package.json
++++ b/package.json
+@@ -8,6 +8,7 @@
+     "start": "next start"
+   },
+   "dependencies": {
++    "firebase-admin": "^13.8.0",
+     "leaflet": "^1.9.4",
+     "next": "16.2.4",
+     "qrcode": "^1.5.4",
+diff --git a/src/app/api/orders/[id]/confirm-pix/route.ts b/src/app/api/orders/[id]/confirm-pix/route.ts
+index 0daa24f..e4f6cb6 100644
+--- a/src/app/api/orders/[id]/confirm-pix/route.ts
++++ b/src/app/api/orders/[id]/confirm-pix/route.ts
+@@ -1,5 +1,5 @@
+ import { NextResponse } from 'next/server';
+-import { getOrder, updateOrder } from '@/lib/store';
++import { getOrder, updateOrder } from '@/lib/orderStore';
+ 
+ /**
+  * In production this would be a webhook from the acquirer (Asaas / MP / Inter).
+@@ -8,8 +8,8 @@ import { getOrder, updateOrder } from '@/lib/store';
+  */
+ export async function POST(_req: Request, ctx: RouteContext<'/api/orders/[id]/confirm-pix'>) {
+   const { id } = await ctx.params;
+-  const o = getOrder(id);
++  const o = await getOrder(id);
+   if (!o) return NextResponse.json({ error: 'not found' }, { status: 404 });
+-  const next = updateOrder(id, { status: 'searching', paidAt: Date.now() });
++  const next = await updateOrder(id, { status: 'searching', paidAt: Date.now() });
+   return NextResponse.json(next);
+ }
+diff --git a/src/app/api/orders/[id]/route.ts b/src/app/api/orders/[id]/route.ts
+index 264c19a..392633f 100644
+--- a/src/app/api/orders/[id]/route.ts
++++ b/src/app/api/orders/[id]/route.ts
+@@ -1,9 +1,9 @@
+ import { NextResponse } from 'next/server';
+-import { getOrder, progressOrder } from '@/lib/store';
++import { getOrder, progressOrder } from '@/lib/orderStore';
+ 
+ export async function GET(_req: Request, ctx: RouteContext<'/api/orders/[id]'>) {
+   const { id } = await ctx.params;
+-  const order = progressOrder(id) ?? getOrder(id);
++  const order = (await progressOrder(id)) ?? (await getOrder(id));
+   if (!order) return NextResponse.json({ error: 'not found' }, { status: 404 });
+   return NextResponse.json(order);
+ }
+diff --git a/src/app/api/orders/route.ts b/src/app/api/orders/route.ts
+index ed3e1a7..0d45d2c 100644
+--- a/src/app/api/orders/route.ts
++++ b/src/app/api/orders/route.ts
+@@ -1,6 +1,6 @@
+ import { NextResponse } from 'next/server';
+ import QRCode from 'qrcode';
+-import { generateOrderId, saveOrder, type Order } from '@/lib/store';
++import { generateOrderId, saveOrder, type Order } from '@/lib/orderStore';
+ import { estimateRoute, priceQuote } from '@/lib/distance';
+ import { buildPixPayload } from '@/lib/pix';
+ 
+@@ -42,7 +42,7 @@ export async function POST(req: Request) {
+     pixQrDataUrl,
+     ref: body.ref ? String(body.ref) : undefined,
+   };
+-  saveOrder(order);
++  await saveOrder(order);
+ 
+   return NextResponse.json({
+     id,
+diff --git a/src/lib/firestore.ts b/src/lib/firestore.ts
+new file mode 100644
+index 0000000..af8dab4
+--- /dev/null
++++ b/src/lib/firestore.ts
+@@ -0,0 +1,62 @@
++/**
++ * Firestore Admin SDK adapter for Delivery NaMão PWA.
++ *
++ * The PWA writes orders straight to the production project
++ * (`namao-delivery-prod`) so the driver app reads them in real time.
++ *
++ * Required env var (set on Vercel as a single line of JSON):
++ *   FIREBASE_SERVICE_ACCOUNT_JSON  — the full JSON downloaded from
++ *     Firebase Console → Project Settings → Service accounts → Generate new
++ *     private key. The JSON is base64 SAFE — paste as-is into the env var.
++ *
++ * Falls back to in-memory mock when the var is missing so local dev still
++ * works without Firebase credentials.
++ */
++
++import { cert, getApp, getApps, initializeApp, type App, type ServiceAccount } from 'firebase-admin/app';
++import { getFirestore, type Firestore } from 'firebase-admin/firestore';
++
++let cachedDb: Firestore | null | undefined;
++
++const APP_ID = 'namao-delivery-prod';
++
++function readServiceAccount(): ServiceAccount | null {
++  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
++  if (!raw) return null;
++  try {
++    return JSON.parse(raw) as ServiceAccount;
++  } catch (err) {
++    console.error('[firestore] invalid FIREBASE_SERVICE_ACCOUNT_JSON:', err);
++    return null;
++  }
++}
++
++/** Returns the shared Firestore instance, or null if Firebase isn't configured. */
++export function getDb(): Firestore | null {
++  if (cachedDb !== undefined) return cachedDb;
++
++  const sa = readServiceAccount();
++  if (!sa) {
++    console.warn('[firestore] FIREBASE_SERVICE_ACCOUNT_JSON not set — falling back to mock store');
++    cachedDb = null;
++    return null;
++  }
++
++  let app: App;
++  if (getApps().length) {
++    app = getApp();
++  } else {
++    app = initializeApp({ credential: cert(sa) });
++  }
++  cachedDb = getFirestore(app);
++  return cachedDb;
++}
++
++/** Path of the orders collection on the shared backend. */
++export function ordersPath(): string {
++  return `artifacts/${APP_ID}/public/data/orders`;
++}
++
++export function isFirestoreEnabled(): boolean {
++  return getDb() !== null;
++}
+diff --git a/src/lib/orderMapper.ts b/src/lib/orderMapper.ts
+new file mode 100644
+index 0000000..de5f4cb
+--- /dev/null
++++ b/src/lib/orderMapper.ts
+@@ -0,0 +1,167 @@
++/**
++ * Schema mapper between the PWA's Order shape and the driver app's
++ * Firestore schema.
++ *
++ * Driver schema fields used (see `namao-delivery/src/js/orders.js`):
++ *   veh: 'Moto' | 'Carro'
++ *   itemType: string
++ *   price: number  (R$)
++ *   origin: string  (formatted address)
++ *   destination: string  (formatted address)
++ *   originCoords: { lat, lng }
++ *   destCoords: { lat, lng }
++ *   status: 'waiting_confirmation' | 'pending' | 'accepted' | 'in_transit' | 'completed' | 'cancelled'
++ *   customerId: string
++ *   driverId: string | null
++ *   driverName: string | null
++ *   driverLat / driverLng: number | null
++ *   createdAt: number
++ *   pickupPhotoUrl, podPhotoUrl, podSignatureUrl: string
++ */
++
++import type { Order, OrderStatus } from './store';
++
++/** PWA → Driver schema status map. */
++export function pwaStatusToDriver(s: OrderStatus): string {
++  switch (s) {
++    case 'awaiting_payment': return 'waiting_confirmation';
++    case 'searching':        return 'pending';
++    case 'accepted':         return 'accepted';
++    case 'picking_up':       return 'accepted';
++    case 'in_transit':       return 'in_transit';
++    case 'delivered':        return 'completed';
++    case 'cancelled':        return 'cancelled';
++  }
++}
++
++/** Driver → PWA schema status map. */
++export function driverStatusToPwa(s: string): OrderStatus {
++  switch (s) {
++    case 'waiting_confirmation': return 'awaiting_payment';
++    case 'pending':              return 'searching';
++    case 'accepted':             return 'accepted';
++    case 'in_transit':           return 'in_transit';
++    case 'completed':            return 'delivered';
++    case 'cancelled':            return 'cancelled';
++    default:                     return 'searching';
++  }
++}
++
++/** Heuristic: choose vehicle from item type / weight. */
++export function defaultVehicleFor(itemType: Order['itemType']): 'Moto' | 'Carro' {
++  if (itemType === 'caixa-grande') return 'Carro';
++  return 'Moto';
++}
++
++/** Builds a one-line formatted address (rua, nº, complemento — bairro · cidade-UF · CEP). */
++export function formatAddressLine(addr: Order['origin']): string {
++  const parts: string[] = [];
++  const street = addr.formatted || '';
++  parts.push(street);
++  if (addr.numero) parts[parts.length - 1] = `${street}, ${addr.numero}`;
++  if (addr.complemento) parts.push(addr.complemento);
++  return parts.filter(Boolean).join(' — ');
++}
++
++/** Convert a PWA order into the doc shape the driver app expects. */
++export function pwaOrderToDriverDoc(o: Order, customerId: string) {
++  const vehicle = defaultVehicleFor(o.itemType);
++  return {
++    veh: vehicle,
++    itemType: itemTypeToLabel(o.itemType),
++    price: o.priceCents / 100,
++    origin: formatAddressLine(o.origin),
++    destination: formatAddressLine(o.destination),
++    originCoords: { lat: o.origin.lat, lng: o.origin.lng },
++    destCoords: { lat: o.destination.lat, lng: o.destination.lng },
++    originRef: o.origin.referencia ?? null,
++    destRef: o.destination.referencia ?? null,
++    distanceKm: o.distanceKm,
++    durationMin: o.durationMin,
++    status: pwaStatusToDriver(o.status),
++    customerId,
++    customerName: o.customerName,
++    customerPhone: o.customerPhone,
++    driverId: null,
++    driverName: null,
++    driverLat: null,
++    driverLng: null,
++    createdAt: o.createdAt,
++    pixPayload: o.pixPayload ?? null,
++    pixQrDataUrl: o.pixQrDataUrl ?? null,
++    ref: o.ref ?? null,
++  };
++}
++
++/** Convert a driver Firestore doc back into a PWA Order (for /acompanhar). */
++export function driverDocToPwaOrder(id: string, d: Record<string, unknown>): Order {
++  const originCoords = (d.originCoords ?? {}) as { lat?: number; lng?: number };
++  const destCoords = (d.destCoords ?? {}) as { lat?: number; lng?: number };
++  const driverInfo = d.driverId
++    ? {
++        name: String(d.driverName ?? 'Motorista'),
++        rating: 5,
++        vehicle: (d.veh === 'Carro' ? 'carro' : 'moto') as 'moto' | 'carro',
++        plate: '—',
++        lat: Number(d.driverLat ?? originCoords.lat ?? 0),
++        lng: Number(d.driverLng ?? originCoords.lng ?? 0),
++        etaMin: Number(d.durationMin ?? 10),
++      }
++    : undefined;
++
++  return {
++    id,
++    createdAt: Number(d.createdAt ?? Date.now()),
++    paidAt: d.pixConfirmedAt ? Number(d.pixConfirmedAt) : undefined,
++    customerName: String(d.customerName ?? ''),
++    customerPhone: String(d.customerPhone ?? ''),
++    origin: {
++      cep: '',
++      formatted: String(d.origin ?? ''),
++      lat: Number(originCoords.lat ?? 0),
++      lng: Number(originCoords.lng ?? 0),
++      referencia: d.originRef ? String(d.originRef) : undefined,
++    },
++    destination: {
++      cep: '',
++      formatted: String(d.destination ?? ''),
++      lat: Number(destCoords.lat ?? 0),
++      lng: Number(destCoords.lng ?? 0),
++      referencia: d.destRef ? String(d.destRef) : undefined,
++    },
++    itemType: labelToItemType(String(d.itemType ?? 'Comida')),
++    distanceKm: Number(d.distanceKm ?? 0),
++    durationMin: Number(d.durationMin ?? 0),
++    priceCents: Math.round(Number(d.price ?? 0) * 100),
++    status: driverStatusToPwa(String(d.status ?? 'pending')),
++    pixPayload: d.pixPayload ? String(d.pixPayload) : undefined,
++    pixQrDataUrl: d.pixQrDataUrl ? String(d.pixQrDataUrl) : undefined,
++    driver: driverInfo,
++    pod: d.podPhotoUrl
++      ? {
++          photoUrl: String(d.podPhotoUrl),
++          signatureDataUrl: d.podSignatureUrl ? String(d.podSignatureUrl) : undefined,
++          completedAt: d.completedAt ? Number(d.completedAt) : undefined,
++        }
++      : undefined,
++    ref: d.ref ? String(d.ref) : undefined,
++  };
++}
++
++const ITEM_LABELS: Record<Order['itemType'], string> = {
++  documento: 'Documento',
++  'caixa-pequena': 'Caixa pequena',
++  'caixa-grande': 'Caixa grande',
++  fragil: 'Frágil',
++  comida: 'Comida',
++};
++
++function itemTypeToLabel(t: Order['itemType']): string {
++  return ITEM_LABELS[t] ?? 'Outros';
++}
++
++function labelToItemType(label: string): Order['itemType'] {
++  const found = (Object.entries(ITEM_LABELS) as [Order['itemType'], string][])
++    .find(([, l]) => l === label);
++  return found ? found[0] : 'comida';
++}
+diff --git a/src/lib/orderStore.ts b/src/lib/orderStore.ts
+new file mode 100644
+index 0000000..f57accf
+--- /dev/null
++++ b/src/lib/orderStore.ts
+@@ -0,0 +1,85 @@
++/**
++ * Order persistence layer for the PWA.
++ *
++ * If `FIREBASE_SERVICE_ACCOUNT_JSON` is set, writes go to the production
++ * Firestore (`namao-delivery-prod`) so the driver app reads them in real
++ * time. Otherwise falls back to the in-memory mock from `store.ts`
++ * (handy for local dev without credentials).
++ */
++
++import { getDb, ordersPath, isFirestoreEnabled } from './firestore';
++import {
++  driverDocToPwaOrder,
++  pwaOrderToDriverDoc,
++  pwaStatusToDriver,
++} from './orderMapper';
++import {
++  generateOrderId as mockGenerateId,
++  getOrder as mockGet,
++  progressOrder as mockProgress,
++  saveOrder as mockSave,
++  updateOrder as mockUpdate,
++  type Order,
++  type OrderStatus,
++} from './store';
++
++export type { Order, OrderStatus } from './store';
++
++/** Random ID matching the existing format (uppercase alphanum, ~10 chars). */
++export function generateOrderId(): string {
++  return mockGenerateId();
++}
++
++export async function saveOrder(o: Order): Promise<void> {
++  const db = getDb();
++  if (!db) {
++    mockSave(o);
++    return;
++  }
++  // Customer ID = phone digits (best stable identity in MVP).
++  const customerId = o.customerPhone || `anon_${o.id}`;
++  const docData = pwaOrderToDriverDoc(o, customerId);
++  await db.collection(ordersPath()).doc(o.id).set(docData);
++}
++
++export async function getOrder(id: string): Promise<Order | undefined> {
++  const db = getDb();
++  if (!db) return mockGet(id);
++  const snap = await db.collection(ordersPath()).doc(id).get();
++  if (!snap.exists) return undefined;
++  return driverDocToPwaOrder(id, snap.data() ?? {});
++}
++
++export async function updateOrder(
++  id: string,
++  patch: Partial<Order>,
++): Promise<Order | undefined> {
++  const db = getDb();
++  if (!db) return mockUpdate(id, patch);
++
++  const ref = db.collection(ordersPath()).doc(id);
++  const update: Record<string, unknown> = {};
++  if (patch.status) update.status = pwaStatusToDriver(patch.status);
++  if (patch.paidAt) update.pixConfirmedAt = patch.paidAt;
++  if (patch.pixPayload) update.pixPayload = patch.pixPayload;
++  if (patch.pixQrDataUrl) update.pixQrDataUrl = patch.pixQrDataUrl;
++  if (Object.keys(update).length === 0) {
++    return getOrder(id);
++  }
++  await ref.update(update);
++  return getOrder(id);
++}
++
++/**
++ * In Firestore mode the driver app drives the lifecycle (waiting → pending →
++ * accepted → in_transit → completed) by writing to the same doc, so we just
++ * read the current state. In mock mode we run the auto-progress timeline.
++ */
++export async function progressOrder(id: string): Promise<Order | undefined> {
++  if (!isFirestoreEnabled()) return mockProgress(id);
++  return getOrder(id);
++}
++
++export function backendMode(): 'firestore' | 'mock' {
++  return isFirestoreEnabled() ? 'firestore' : 'mock';
++}
+-- 
+2.34.1
+
