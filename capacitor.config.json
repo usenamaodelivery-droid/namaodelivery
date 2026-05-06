@@ -1,13 +1,13 @@
 {
   "appId": "com.namao.delivery",
-  "appName": "NaMão Delivery",
+  "appName": "Delivery NaMão",
   "webDir": "src",
   "server": {
     "androidScheme": "https"
   },
   "plugins": {
     "BackgroundGeolocation": {
-      "notificationTitle": "NaMão Delivery",
+      "notificationTitle": "Delivery NaMão",
       "notificationText": "Rastreando sua entrega em andamento",
       "backgroundMessage": "NaMão está usando sua localização",
       "backgroundTitle": "Entrega ativa",

@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">NaMão Delivery</string>
-    <string name="title_activity_main">NaMão Delivery</string>
+    <string name="app_name">Delivery NaMão</string>
+    <string name="title_activity_main">Delivery NaMão</string>
     <string name="package_name">com.namao.delivery</string>
     <string name="custom_url_scheme">com.namao.delivery</string>
 </resources>
