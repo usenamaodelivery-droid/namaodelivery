@@ -44,15 +44,17 @@ exports.setAdminClaim = onCall(async (request) => {
  * `pending` (já passou pelo PIX). Idempotente: só dispara na transição.
  */
 async function notifyAvailableDrivers(orderData, orderId) {
+  // Pega todos approved e filtra na CPU — `!=` no Firestore exclui docs
+  // sem o campo, e queremos default=true.
   const profilesSnap = await admin
     .firestore()
     .collectionGroup("profile")
     .where("status", "==", "approved")
-    .where("notifyOnNewOrder", "!=", false)
     .get();
 
   const tokens = [];
   profilesSnap.forEach((doc) => {
+    if (doc.get("notifyOnNewOrder") === false) return;
     const t = doc.get("fcmToken");
     if (typeof t === "string" && t.length > 10) tokens.push(t);
   });

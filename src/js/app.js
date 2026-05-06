@@ -8,12 +8,18 @@ import {
   processOrderUpdate as processNewOrderAlert,
   requestNotificationPermission,
   testNewOrderSound,
+  onFcmToken,
 } from "./notifications.js";
 import {
   subscribeOrders,
   acceptOrder,
 } from "./orders.js";
-import { subscribeDriverProfile, registerDriver } from "./driverProfile.js";
+import {
+  subscribeDriverProfile,
+  registerDriver,
+  saveDriverFcmToken,
+  setNotifyOnNewOrder,
+} from "./driverProfile.js";
 import {
   openPOD,
   closePOD,
@@ -77,7 +83,14 @@ onAuth(async (user) => {
     applyDriverProfile();
   });
 
-  // Permissão de notificação assim que o motorista loga
+  // Permissão de notificação assim que o motorista loga.
+  // Quando o Capacitor entregar o FCM token, salvamos no perfil pra que
+  // a Cloud Function consiga mandar push pra esse device.
+  onFcmToken((token) => {
+    saveDriverFcmToken(user.uid, token).catch((err) =>
+      console.warn("[fcm] save token failed:", err),
+    );
+  });
   requestNotificationPermission();
 
   // Listener de pedidos
@@ -115,6 +128,13 @@ function applyDriverProfile() {
   const displayName = document.getElementById("profile-display-name");
   const statusLabel = document.getElementById("profile-status");
   const balanceLabel = document.getElementById("profile-wallet-balance");
+  const notifyToggle = document.getElementById("notify-toggle");
+
+  if (notifyToggle) {
+    const enabled = driverProfile?.notifyOnNewOrder !== false;
+    notifyToggle.classList.toggle("active", enabled);
+    notifyToggle.setAttribute("aria-pressed", String(enabled));
+  }
 
   if (!driverProfile) {
     overlay?.classList.add("hidden");
@@ -565,8 +585,19 @@ Object.assign(window, {
     showToast(`Saldo atual: R$ ${balance}. Solicitação de saque registrada.`);
   },
   openWhatsAppSupport: () => window.open(`https://wa.me/${SUPPORT_WHATSAPP}`, "_blank"),
-  centerDriverMap,
   testNewOrderSound,
+  toggleNotifyOnNewOrder: async () => {
+    if (!currentUser) return;
+    const next = driverProfile?.notifyOnNewOrder === false; // se estava off, vira on
+    try {
+      await setNotifyOnNewOrder(currentUser.uid, next);
+      showToast(next ? "Notificações ativadas." : "Notificações desativadas.");
+    } catch (err) {
+      console.warn("[notify] toggle failed:", err);
+      showToast("Erro ao salvar preferência.");
+    }
+  },
+  centerDriverMap,
   toggleTheme,
   updateFileLabel
 });
