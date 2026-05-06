@@ -40,7 +40,7 @@
     <div class="bg-white w-full h-full max-w-md shadow-2xl relative overflow-hidden flex flex-col sm:h-[850px] sm:rounded-[2rem] sm:border-8 border-gray-900">
 
         <!-- SPLASH SCREEN -->
-        <div id="splash-screen" class="absolute inset-0 z-[100] flex flex-col items-center justify-center transition-opacity duration-500" style="background: linear-gradient(135deg, #1B304F 0%, #0F1F3A 100%);">
+        <div id="splash-screen" class="absolute inset-0 z-[2100] flex flex-col items-center justify-center transition-opacity duration-500" style="background: linear-gradient(135deg, #1B304F 0%, #0F1F3A 100%);">
             <img src="icons/namao-icon.png" alt="Logo NaMão" class="w-36 h-36 rounded-3xl shadow-2xl mb-6 animate-bounce" onerror="this.onerror=null; this.src='https://via.placeholder.com/150/1B304F/E8B93A?text=N'">
             <h1 class="text-4xl font-black tracking-tight text-white"><span class="text-gray-200 font-light">Delivery</span> <span class="text-accent">Na</span>Mão</h1>
             <p class="text-accent/90 mt-2 text-xs tracking-[0.3em] uppercase font-extrabold">App do Entregador</p>
@@ -48,7 +48,7 @@
         </div>
 
         <!-- OVERLAY DE BANIMENTO -->
-        <div id="account-blocked-overlay" class="absolute inset-0 hidden bg-primaryDark z-[200] flex flex-col items-center justify-center p-8 text-center text-white fade-in">
+        <div id="account-blocked-overlay" class="absolute inset-0 hidden bg-primaryDark z-[2200] flex flex-col items-center justify-center p-8 text-center text-white fade-in">
             <i class="fa-solid fa-user-lock text-7xl text-danger mb-6"></i>
             <h2 class="text-3xl font-black mb-3 uppercase tracking-tight">Acesso Negado</h2>
             <p id="block-message" class="text-gray-200 text-base mb-8 font-semibold">Esta conta foi suspensa por violar as regras de segurança.</p>
@@ -57,7 +57,7 @@
         </div>
 
         <!-- TELA DE AUTENTICAÇÃO -->
-        <div id="auth-screen" class="absolute inset-0 hidden z-[150] flex flex-col p-8 fade-in" style="background: linear-gradient(135deg, #1B304F 0%, #0F1F3A 100%);">
+        <div id="auth-screen" class="absolute inset-0 hidden z-[2000] flex flex-col p-8 fade-in" style="background: linear-gradient(135deg, #1B304F 0%, #0F1F3A 100%);">
             <div class="flex-1 flex flex-col justify-center items-center text-center">
                 <img src="icons/namao-icon.png" class="w-24 h-24 rounded-3xl mb-6 shadow-2xl border-2 border-accent/40" alt="NaMão logo" onerror="this.onerror=null; this.src='https://via.placeholder.com/96/1B304F/E8B93A?text=N'">
                 <h1 class="text-4xl font-black text-white tracking-tight"><span class="text-gray-200 font-light">Delivery</span> <span class="text-accent">Na</span>Mão</h1>
@@ -306,7 +306,7 @@
                     <button onclick="signOutUser()" class="w-full bg-red-50 text-danger font-extrabold py-4 rounded-2xl shadow-sm border-2 border-red-200 hover:bg-red-100 transition text-base">
                         <i class="fa-solid fa-right-from-bracket mr-2"></i> Sair da Conta
                     </button>
-                    <p class="text-center text-xs text-gray-400 mt-2 font-semibold">Delivery NaMão v1.5.4 · App do Entregador</p>
+                    <p class="text-center text-xs text-gray-400 mt-2 font-semibold">Delivery NaMão v1.5.5 · App do Entregador</p>
                 </div>
             </main>
 

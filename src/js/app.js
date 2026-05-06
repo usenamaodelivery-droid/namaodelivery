@@ -445,6 +445,30 @@ function closeDocPreview() {
   document.getElementById("doc-preview-modal")?.classList.add("hidden");
 }
 
+function haversineKm(a, b) {
+  if (!a || !b || a.length !== 2 || b.length !== 2) return null;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const [lat1, lon1] = a;
+  const [lat2, lon2] = b;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const x =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(x)));
+}
+
+function getDriverPosition() {
+  try {
+    const raw = localStorage.getItem("namao_last_coords");
+    if (!raw) return null;
+    const arr = JSON.parse(raw);
+    if (Array.isArray(arr) && arr.length === 2 && arr.every(Number.isFinite)) return arr;
+  } catch { /* ignore */ }
+  return null;
+}
+
 function renderAvailableOrderCard(o) {
   const earning = (o.price * DRIVER_SHARE).toFixed(2).replace(".", ",");
   const itemIcon = {
@@ -452,21 +476,51 @@ function renderAvailableOrderCard(o) {
     Documentos: "fa-file-alt",
     Caixas: "fa-box-open"
   }[o.itemType] || "fa-cube";
-  const km = o.distanceKm ? `${Number(o.distanceKm).toFixed(1)} km` : "";
+
+  const rideKm = o.distanceKm ? Number(o.distanceKm).toFixed(1) : null;
+
+  // Distância do motorista até a origem (pickup)
+  const driverPos = getDriverPosition();
+  const pickupKm =
+    driverPos && o.originCoords?.length === 2
+      ? haversineKm(driverPos, o.originCoords)
+      : null;
+  const pickupLabel = pickupKm != null ? `${pickupKm.toFixed(1)} km` : null;
+
+  // R$/km da corrida — ajuda motorista decidir se vale a pena
+  const rsPerKm = rideKm && Number(rideKm) > 0
+    ? (o.price * DRIVER_SHARE / Number(rideKm)).toFixed(2).replace(".", ",")
+    : null;
+
   return `
-    <div class="card-primary-gradient p-5">
-      <div class="flex justify-between items-start mb-3">
-        <span class="bg-accent text-primary text-xs font-black px-3 py-1.5 rounded-full uppercase flex items-center gap-1">
-          <i class="fa-solid ${itemIcon}"></i> ${o.itemType || "Item"} · ${o.veh}${km ? ` · ${km}` : ""}
-        </span>
-        <p class="text-3xl font-black text-accent">R$ ${earning}</p>
+    <div class="bg-white rounded-2xl p-4 shadow-md border border-gray-100 active:scale-[0.99] transition">
+      <div class="flex justify-between items-start mb-2">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="bg-accent/15 text-primary text-[10px] font-black px-2 py-0.5 rounded-full uppercase flex items-center gap-1 whitespace-nowrap">
+              <i class="fa-solid ${itemIcon}"></i> ${o.itemType || "Item"}
+            </span>
+            <span class="bg-primary/10 text-primary text-[10px] font-black px-2 py-0.5 rounded-full uppercase whitespace-nowrap">${o.veh || "Moto"}</span>
+          </div>
+        </div>
+        <div class="text-right pl-2">
+          <p class="text-2xl font-black text-primary leading-none">R$&nbsp;${earning}</p>
+          ${rsPerKm ? `<p class="text-[10px] font-bold text-gray-400 mt-0.5">R$ ${rsPerKm}/km</p>` : ""}
+        </div>
       </div>
-      <div class="text-sm font-bold space-y-2 mb-4">
-        <p><i class="fa-solid fa-location-dot text-accent w-5"></i> ${o.origin || "—"}</p>
-        <p><i class="fa-solid fa-flag-checkered text-accent w-5"></i> ${o.destination || "—"}</p>
+
+      <div class="flex items-center gap-2 text-[11px] font-black uppercase tracking-wider mb-2.5">
+        ${pickupLabel ? `<span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full"><i class="fa-solid fa-person-walking-arrow-right"></i> ${pickupLabel} até origem</span>` : ""}
+        ${rideKm ? `<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full"><i class="fa-solid fa-route"></i> ${rideKm} km corrida</span>` : ""}
       </div>
-      <button onclick="window.acceptOrderFromUI('${o.id}')" class="btn-accent w-full uppercase tracking-widest text-base">
-        <i class="fa-solid fa-bolt"></i> ACEITAR ENTREGA
+
+      <div class="text-[13px] font-semibold space-y-1 mb-3 text-gray-700 leading-tight">
+        <p class="truncate"><i class="fa-solid fa-location-dot text-success w-4"></i> <b class="text-primary">De:</b> ${o.origin || "—"}</p>
+        <p class="truncate"><i class="fa-solid fa-flag-checkered text-danger w-4"></i> <b class="text-primary">Para:</b> ${o.destination || "—"}</p>
+      </div>
+
+      <button onclick="window.acceptOrderFromUI('${o.id}')" class="btn-accent w-full uppercase tracking-widest text-sm py-3">
+        <i class="fa-solid fa-bolt"></i> ACEITAR — R$&nbsp;${earning}
       </button>
     </div>`;
 }
@@ -476,23 +530,26 @@ function renderActiveDelivery(o) {
   const isInTransit = o.status === "in_transit";
   const km = o.distanceKm ? `${Number(o.distanceKm).toFixed(1)} km` : "";
 
-  // botão "Abrir no Maps" (Google Maps app)
-  const dest = o.destCoords;
-  const orig = o.originCoords;
-  const target = isInTransit ? dest : orig;
-  const mapsBtn = (target?.length === 2)
-    ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${target[0]},${target[1]}&travelmode=driving" target="_blank" class="block w-full text-center mt-2 py-3 bg-white text-primary font-extrabold uppercase text-sm tracking-widest rounded-2xl border-2 border-accent active:scale-[0.98] transition"><i class="fa-solid fa-route text-accentDark mr-1"></i> Abrir no Google Maps</a>`
-    : "";
+  // Navegação: origem se ainda não coletou, destino se já em trânsito
+  const target = isInTransit ? o.destCoords : o.originCoords;
+  const targetAddr = isInTransit ? (o.destination || "destino") : (o.origin || "origem");
+  const navLabel = isInTransit ? "IR PRO DESTINO" : "IR PRA ORIGEM";
+  const navBtn = (target?.length === 2)
+    ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${target[0]},${target[1]}&travelmode=driving" target="_blank" class="block w-full text-center py-4 bg-accent text-primary font-black uppercase text-base tracking-widest rounded-2xl shadow-lg active:scale-[0.98] transition mb-2"><i class="fa-solid fa-route mr-2"></i> ${navLabel} (GOOGLE MAPS)</a>`
+    : `<div class="w-full text-center py-3 bg-white/10 text-white/60 font-bold text-sm rounded-2xl mb-2"><i class="fa-solid fa-map-location-dot"></i> Navegue até: ${targetAddr}</div>`;
 
   return `
     <div class="card-primary-gradient p-5">
       <p class="text-xs font-black text-accent uppercase tracking-widest mb-3">
-        <i class="fa-solid fa-circle-dot fa-beat-fade"></i> Entrega em andamento — R$ ${earning}${km ? ` · ${km}` : ""}
+        <i class="fa-solid fa-circle-dot fa-beat-fade"></i> ${isInTransit ? "Em trânsito" : "Coleta em andamento"} — R$ ${earning}${km ? ` · ${km}` : ""}
       </p>
-      <div class="text-sm font-bold space-y-2 mb-4">
-        <p><i class="fa-solid fa-location-dot text-accent w-5"></i> ${o.origin || "—"}</p>
-        <p><i class="fa-solid fa-flag-checkered text-accent w-5"></i> ${o.destination || "—"}</p>
+      <div class="text-sm font-bold space-y-2 mb-4 text-white">
+        <p><i class="fa-solid fa-location-dot text-accent w-5"></i> <b>De:</b> ${o.origin || "—"}</p>
+        <p><i class="fa-solid fa-flag-checkered text-accent w-5"></i> <b>Para:</b> ${o.destination || "—"}</p>
       </div>
+
+      ${navBtn}
+
       ${
         isInTransit
           ? `
@@ -500,7 +557,7 @@ function renderActiveDelivery(o) {
               <p class="font-extrabold text-accent uppercase tracking-widest mb-1"><i class="fa-solid fa-circle-info"></i> Como finalizar</p>
               <ol class="list-decimal list-inside space-y-0.5">
                 <li>Entregue o produto ao cliente</li>
-                <li>Peça para o cliente <b>assinar na tela</b></li>
+                <li>Peça pro cliente <b>assinar na tela</b></li>
                 <li>Tire <b>1 foto</b> do produto entregue</li>
                 <li>Toque em <b>CONFIRMAR ENTREGA</b> abaixo</li>
               </ol>
@@ -509,13 +566,12 @@ function renderActiveDelivery(o) {
           `
           : `
             <div class="bg-white/10 border border-accent/40 rounded-2xl p-3 mb-3 text-xs text-white/90 leading-relaxed">
-              <p class="font-extrabold text-accent uppercase tracking-widest mb-1"><i class="fa-solid fa-circle-info"></i> Pr\u00f3ximo passo</p>
-              <p>V\u00e1 at\u00e9 a <b>origem</b>, colete o produto e tire uma foto pra comprovar a retirada.</p>
+              <p class="font-extrabold text-accent uppercase tracking-widest mb-1"><i class="fa-solid fa-circle-info"></i> Próximo passo</p>
+              <p>Toque no bot\u00e3o acima pra navegar at\u00e9 a origem. Ao chegar, colete o produto e tire uma foto pra comprovar.</p>
             </div>
             <button onclick="window.openPickupPhoto('${o.id}')" class="btn-accent w-full uppercase tracking-widest text-base"><i class="fa-solid fa-camera"></i> CONFIRMAR COLETA (FOTO)</button>
           `
       }
-      ${mapsBtn}
     </div>`;
 }
 
