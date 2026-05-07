@@ -337,28 +337,44 @@ function renderDriverMural() {
     (o) => o.driverId === currentUser?.uid && ["accepted", "in_transit"].includes(o.status)
   );
 
-  // Toggle layout: corrida ativa esconde header/filtros e expande mapa
-  const muralHeader = document.getElementById("mural-header");
+  // Toggle layout estilo iFood/Uber: corrida ativa = mapa fullscreen + status pill +
+  // action bar fixa no rodapé do mapa + FAB de chat. Sem card empilhando tudo.
   const mapContainer = document.getElementById("map-container");
-  const targetMapHeight = myActive ? "42%" : "32%";
-  if (mapContainer && mapContainer.style.height !== targetMapHeight) {
-    mapContainer.style.height = targetMapHeight;
-    invalidateDriverMapSize();
-  }
-  if (myActive) {
-    if (muralHeader) muralHeader.classList.add("hidden");
-  } else {
-    if (muralHeader) muralHeader.classList.remove("hidden");
-  }
+  const muralSection = document.getElementById("mural-section");
+  const mapHud = document.getElementById("map-hud");
+  const mapCenterBtn = document.getElementById("map-center-btn");
+  const statusPill = document.getElementById("active-status-pill");
+  const actionBar = document.getElementById("active-action-bar");
+  const chatFab = document.getElementById("active-chat-fab");
 
   if (myActive) {
-    el.innerHTML = renderActiveDelivery(myActive);
-    const pill = document.getElementById("orders-count-pill");
-    if (pill) pill.innerText = "1";
-    // Re-popula chat depois que o DOM da corrida ativa é re-renderizado.
-    renderChatPanel();
+    // Modo corrida ativa: mapa ocupa tudo, ações no rodapé
+    if (mapContainer && mapContainer.style.height !== "100%") {
+      mapContainer.style.height = "100%";
+      invalidateDriverMapSize();
+    }
+    if (muralSection) muralSection.classList.add("hidden");
+    if (mapHud) mapHud.classList.add("hidden");
+    if (mapCenterBtn) mapCenterBtn.classList.add("hidden");
+    if (statusPill) statusPill.classList.remove("hidden");
+    if (actionBar) actionBar.classList.remove("hidden");
+    if (chatFab) chatFab.classList.remove("hidden");
+    populateActiveDeliveryUI(myActive);
+    el.innerHTML = "";
     return;
   }
+
+  // Modo mural: mapa compacto, lista de corridas em destaque
+  if (mapContainer && mapContainer.style.height !== "32%") {
+    mapContainer.style.height = "32%";
+    invalidateDriverMapSize();
+  }
+  if (muralSection) muralSection.classList.remove("hidden");
+  if (mapHud) mapHud.classList.remove("hidden");
+  if (mapCenterBtn) mapCenterBtn.classList.remove("hidden");
+  if (statusPill) statusPill.classList.add("hidden");
+  if (actionBar) actionBar.classList.add("hidden");
+  if (chatFab) chatFab.classList.add("hidden");
 
   // Offline: não mostra corridas disponíveis. Motorista precisa virar online.
   if (!driverOnline) {
@@ -545,14 +561,24 @@ function renderAvailableOrderCard(o) {
     </div>`;
 }
 
-function renderActiveDelivery(o) {
+// Popula a UI de corrida ativa (status pill + botões). Layout estilo iFood/Uber:
+// mapa fullscreen, status fininho no topo, botões grandes fixos no rodapé,
+// FAB de chat. Sem cartões/scroll empilhados.
+function populateActiveDeliveryUI(o) {
   const earning = (o.price * DRIVER_SHARE).toFixed(2).replace(".", ",");
   const isInTransit = o.status === "in_transit";
   const km = o.distanceKm ? `${Number(o.distanceKm).toFixed(1)} km` : "";
 
-  // Navegação: sempre abre o Google Maps. Se temos coordenadas exatas
-  // usamos lat,lng (mais preciso); se não, cai no endereço em texto
-  // — melhor que o motorista ter que copiar manualmente.
+  // Texto do status pill (1 linha de status + 1 linha com endereço)
+  const line1Text = `${isInTransit ? "Em trânsito" : "Coleta em andamento"} — R$ ${earning}${km ? ` · ${km}` : ""}`;
+  const line2Label = isInTransit ? "Para:" : "Origem:";
+  const line2Addr = isInTransit ? (o.destination || "—") : (o.origin || "—");
+  const line1 = document.getElementById("active-status-line1");
+  const line2 = document.getElementById("active-status-line2");
+  if (line1) line1.textContent = line1Text;
+  if (line2) line2.textContent = `${line2Label} ${line2Addr}`;
+
+  // Botão IR PRO DESTINO / PRA ORIGEM — sempre clicável (fallback pra texto)
   const target = isInTransit ? o.destCoords : o.originCoords;
   const targetAddr = isInTransit ? (o.destination || "") : (o.origin || "");
   const navLabel = isInTransit ? "IR PRO DESTINO" : "IR PRA ORIGEM";
@@ -560,43 +586,34 @@ function renderActiveDelivery(o) {
     ? `${target[0]},${target[1]}`
     : encodeURIComponent(targetAddr || "");
   const gmapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${gmapsDest}&travelmode=driving`;
+  const navBtn = document.getElementById("active-nav-btn");
+  const navLbl = document.getElementById("active-nav-label");
+  if (navBtn) navBtn.href = gmapsUrl;
+  if (navLbl) navLbl.textContent = navLabel;
 
-  return `
-    <div class="card-primary-gradient p-4">
-      <p class="text-[11px] font-black text-accent uppercase tracking-widest mb-2">
-        <i class="fa-solid fa-circle-dot fa-beat-fade"></i> ${isInTransit ? "Em trânsito" : "Coleta em andamento"} — R$ ${earning}${km ? ` · ${km}` : ""}
-      </p>
-      <div class="text-[13px] font-bold space-y-1 mb-3 text-white leading-tight">
-        <p class="truncate"><i class="fa-solid fa-location-dot text-accent w-4"></i> <b>De:</b> ${o.origin || "—"}</p>
-        <p class="truncate"><i class="fa-solid fa-flag-checkered text-accent w-4"></i> <b>Para:</b> ${o.destination || "—"}</p>
-      </div>
-
-      <!-- AÇÃO PRIMÁRIA: navegação (sempre visível, sempre clicável) -->
-      <a href="${gmapsUrl}" target="_blank" class="block w-full text-center py-4 bg-accent text-primary font-black uppercase text-base tracking-widest rounded-2xl shadow-lg active:scale-[0.98] transition mb-2">
-        <i class="fa-solid fa-route mr-2"></i> ${navLabel} (GOOGLE MAPS)
-      </a>
-
-      <!-- AÇÃO SECUNDÁRIA: confirmar coleta ou entrega -->
-      ${
-        isInTransit
-          ? `<button onclick="window.openPODFromUI('${o.id}')" class="btn-success w-full uppercase tracking-widest text-sm shadow-lg animate-pulse"><i class="fa-solid fa-signature"></i> CONFIRMAR ENTREGA</button>`
-          : `<button onclick="window.openPickupPhoto('${o.id}')" class="btn-accent w-full uppercase tracking-widest text-sm"><i class="fa-solid fa-camera"></i> CONFIRMAR COLETA (FOTO)</button>`
-      }
-
-      <!-- CHAT COLAPSADO — só abre se motorista quiser -->
-      <button id="chat-toggle-btn" onclick="window.toggleChatPanel()" class="mt-3 w-full bg-white/10 hover:bg-white/15 border border-white/10 rounded-2xl px-3 py-2 flex items-center justify-between text-white text-xs font-bold uppercase tracking-widest active:scale-[0.99] transition">
-        <span><i class="fa-solid fa-comments text-accent mr-2"></i>Chat com o cliente <span id="chat-badge" class="hidden ml-1 bg-accent text-primary text-[10px] px-1.5 py-0.5 rounded-full"></span></span>
-        <span id="chat-caret" class="text-accent"><i class="fa-solid fa-chevron-down"></i></span>
-      </button>
-      <div id="chat-panel" class="hidden mt-2 bg-white/5 border border-white/10 rounded-2xl p-3">
-        <div id="chat-messages" class="bg-white/10 rounded-xl p-2 mb-2 max-h-40 overflow-y-auto flex flex-col gap-1.5"></div>
-        <div class="flex gap-2">
-          <input id="chat-input" type="text" maxlength="500" placeholder="Mensagem…" class="flex-1 bg-white/95 text-primary text-sm px-3 py-2 rounded-xl outline-none" onkeydown="if(event.key==='Enter'){event.preventDefault();window.sendChatFromUI();}" />
-          <button onclick="window.sendChatFromUI()" class="bg-accent text-primary font-black text-xs uppercase tracking-wider px-3 py-2 rounded-xl">Enviar</button>
-        </div>
-      </div>
-    </div>`;
+  // Botão de confirmação (coleta vs entrega) — varia conforme o status
+  const confirmLbl = document.getElementById("active-confirm-label");
+  const confirmIcon = document.getElementById("active-confirm-icon");
+  const confirmBtn = document.getElementById("active-confirm-btn");
+  if (confirmLbl) confirmLbl.textContent = isInTransit ? "CONFIRMAR ENTREGA" : "CONFIRMAR COLETA";
+  if (confirmIcon) confirmIcon.className = isInTransit ? "fa-solid fa-signature mr-2" : "fa-solid fa-camera mr-2";
+  if (confirmBtn) {
+    confirmBtn.dataset.orderId = o.id;
+    confirmBtn.dataset.action = isInTransit ? "delivery" : "pickup";
+  }
 }
+
+function activeConfirmAction() {
+  const btn = document.getElementById("active-confirm-btn");
+  if (!btn) return;
+  const orderId = btn.dataset.orderId;
+  if (btn.dataset.action === "delivery") {
+    window.openPODFromUI(orderId);
+  } else {
+    window.openPickupPhoto(orderId);
+  }
+}
+window.activeConfirmAction = activeConfirmAction;
 
 function syncActiveDeliveryOnMap() {
   if (!currentUser) return;
@@ -613,6 +630,9 @@ function syncActiveDeliveryOnMap() {
     lastActiveOrderId = null;
     clearActiveDelivery();
     unsubscribeChat();
+    // Fecha modal de chat ao sair de corrida ativa
+    const modal = document.getElementById("chat-modal");
+    if (modal && !modal.classList.contains("hidden")) modal.classList.add("hidden");
   }
 }
 
@@ -659,41 +679,52 @@ function unsubscribeChat() {
 }
 
 function updateChatBadge() {
-  const badge = document.getElementById("chat-badge");
+  const badge = document.getElementById("active-chat-fab-badge");
   if (!badge) return;
   if (chatUnread > 0) {
-    badge.textContent = String(chatUnread);
+    badge.textContent = chatUnread > 9 ? "9+" : String(chatUnread);
     badge.classList.remove("hidden");
   } else {
     badge.classList.add("hidden");
   }
 }
 
-function toggleChatPanel() {
-  const panel = document.getElementById("chat-panel");
-  const caret = document.getElementById("chat-caret");
-  if (!panel) return;
-  chatOpen = panel.classList.contains("hidden"); // se estava hidden, agora vai abrir
-  panel.classList.toggle("hidden");
-  if (caret) caret.innerHTML = chatOpen ? '<i class="fa-solid fa-chevron-up"></i>' : '<i class="fa-solid fa-chevron-down"></i>';
-  if (chatOpen) {
-    chatUnread = 0;
-    updateChatBadge();
-    // Foca no input pra digitar rápido + scroll pro fim
-    const list = document.getElementById("chat-messages");
-    if (list) list.scrollTop = list.scrollHeight;
-    const input = document.getElementById("chat-input");
-    if (input) setTimeout(() => input.focus(), 50);
-  }
+function openChatModal() {
+  const modal = document.getElementById("chat-modal");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+  chatOpen = true;
+  chatUnread = 0;
+  updateChatBadge();
+  // Render mensagens + scroll pro fim + foca input
+  renderChatPanel();
+  const list = document.getElementById("chat-messages");
+  if (list) list.scrollTop = list.scrollHeight;
+  const input = document.getElementById("chat-input");
+  if (input) setTimeout(() => input.focus(), 80);
 }
-window.toggleChatPanel = toggleChatPanel;
+window.openChatModal = openChatModal;
+
+function closeChatModal() {
+  const modal = document.getElementById("chat-modal");
+  if (!modal) return;
+  modal.classList.add("hidden");
+  chatOpen = false;
+}
+window.closeChatModal = closeChatModal;
+
+// Fecha modal ao clicar no fundo (não no conteúdo)
+function closeChatModalOnBg(ev) {
+  if (ev && ev.target && ev.target.id === "chat-modal") closeChatModal();
+}
+window.closeChatModalOnBg = closeChatModalOnBg;
 
 function renderChatPanel() {
   updateChatBadge();
   const list = document.getElementById("chat-messages");
   if (!list) return;
   if (chatMessages.length === 0) {
-    list.innerHTML = `<p class="text-xs text-white/60 text-center py-2">Nenhuma mensagem ainda. Mande um oi pro cliente 👋</p>`;
+    list.innerHTML = `<p class="text-xs text-gray-500 text-center py-4">Nenhuma mensagem ainda. Mande um oi pro cliente 👋</p>`;
     return;
   }
   list.innerHTML = chatMessages.map((m) => {
@@ -702,9 +733,9 @@ function renderChatPanel() {
     const text = String(m.text || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     return `
       <div class="flex ${mine ? "justify-end" : "justify-start"}">
-        <div class="max-w-[85%] rounded-2xl px-3 py-1.5 text-sm ${mine ? "bg-accent text-primary rounded-br-sm font-bold" : "bg-white/90 text-primary rounded-bl-sm"}">
+        <div class="max-w-[85%] rounded-2xl px-3 py-1.5 text-sm ${mine ? "bg-accent text-primary rounded-br-sm font-bold" : "bg-white border border-gray-200 text-primary rounded-bl-sm"}">
           <div class="whitespace-pre-wrap break-words">${text}</div>
-          <div class="text-[10px] ${mine ? "text-primary/70" : "text-primary/60"} mt-0.5">${hhmm}</div>
+          <div class="text-[10px] ${mine ? "text-primary/70" : "text-gray-400"} mt-0.5">${hhmm}</div>
         </div>
       </div>`;
   }).join("");
