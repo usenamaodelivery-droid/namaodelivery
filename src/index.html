@@ -346,7 +346,7 @@
                     <button onclick="signOutUser()" class="w-full bg-red-50 text-danger font-extrabold py-4 rounded-2xl shadow-sm border-2 border-red-200 hover:bg-red-100 transition text-base">
                         <i class="fa-solid fa-right-from-bracket mr-2"></i> Sair da Conta
                     </button>
-                    <p class="text-center text-xs text-gray-400 mt-2 font-semibold">Delivery NaMão v1.5.8 · App do Entregador</p>
+                    <p class="text-center text-xs text-gray-400 mt-2 font-semibold">Delivery NaMão v1.5.9 · App do Entregador</p>
                 </div>
             </main>
 
@@ -489,7 +489,7 @@
         </div>
 
         <!-- MODAL Pickup Photo (foto da retirada — POD "antes") -->
-        <div id="pickup-photo-modal" class="absolute inset-0 bg-primaryDark/98 z-[700] hidden flex flex-col p-6 overflow-y-auto">
+        <div id="pickup-photo-modal" class="absolute inset-0 bg-primaryDark/98 z-[1600] hidden flex flex-col p-6 overflow-y-auto">
             <div class="bg-white rounded-3xl p-6 fade-in text-center shadow-2xl my-auto">
                 <i class="fa-solid fa-bag-shopping text-accent text-5xl mb-3"></i>
                 <h3 class="text-3xl font-black text-primary mb-2">Confirmar Coleta</h3>
@@ -498,6 +498,7 @@
                     <div>
                         <label class="text-sm font-extrabold text-primary uppercase tracking-wider block mb-2">Foto da retirada</label>
                         <input type="file" id="pickup-photo" accept="image/*" capture="environment" class="w-full text-base font-bold" onchange="validatePickupPhoto()">
+                        <img id="pickup-photo-preview" class="hidden mt-3 w-full max-h-56 object-contain rounded-2xl border-2 border-accent shadow-lg" alt="Pré-visualização da foto" />
                         <p class="text-xs text-gray-500 mt-2">Tira foto do pacote ou comida na hora da retirada — vira prova de que saiu certo do estabelecimento.</p>
                     </div>
                 </div>
@@ -507,7 +508,7 @@
         </div>
 
         <!-- MODAL POD (Prova de Entrega — foto "depois" + assinatura) -->
-        <div id="proof-delivery-modal" class="absolute inset-0 bg-primaryDark/98 z-[700] hidden flex flex-col p-6 overflow-y-auto">
+        <div id="proof-delivery-modal" class="absolute inset-0 bg-primaryDark/98 z-[1600] hidden flex flex-col p-6 overflow-y-auto">
             <div class="bg-white rounded-3xl p-6 fade-in text-center shadow-2xl my-auto">
                 <i class="fa-solid fa-camera-retro text-accent text-5xl mb-3"></i>
                 <h3 class="text-3xl font-black text-primary mb-2">Prova de Entrega</h3>
@@ -516,6 +517,7 @@
                     <div>
                         <label class="text-sm font-extrabold text-primary uppercase tracking-wider block mb-2">1. Foto do Local da Entrega</label>
                         <input type="file" id="delivery-photo" accept="image/*" capture="environment" class="w-full text-base font-bold" onchange="validatePOD()">
+                        <img id="delivery-photo-preview" class="hidden mt-3 w-full max-h-56 object-contain rounded-2xl border-2 border-accent shadow-lg" alt="Pré-visualização da foto" />
                     </div>
                     <div>
                         <label class="text-sm font-extrabold text-primary uppercase tracking-wider block mb-2">2. Assinatura do Cliente</label>
