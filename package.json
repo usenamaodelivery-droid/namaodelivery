@@ -1,6 +1,6 @@
 {
   "name": "namao-delivery",
-  "version": "1.5.6",
+  "version": "1.5.7",
   "description": "Delivery NaMão — Capacitor Android app (driver-only) + Firebase backend",
   "private": true,
   "scripts": {

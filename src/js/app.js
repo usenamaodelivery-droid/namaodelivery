@@ -42,6 +42,7 @@ import {
   centerDriverMap,
   showActiveDelivery,
   clearActiveDelivery,
+  invalidateDriverMapSize,
 } from "./maps.js";
 import {
   DRIVER_SHARE,
@@ -61,6 +62,8 @@ let unsubMessages = null;
 let lastActiveOrderId = null;
 let chatMessages = [];
 let chatLastMsgCount = 0;
+let chatOpen = false;
+let chatUnread = 0;
 
 // Estado online/offline persiste em localStorage. Default = online.
 let driverOnline = (() => {
@@ -333,6 +336,21 @@ function renderDriverMural() {
   const myActive = orders.find(
     (o) => o.driverId === currentUser?.uid && ["accepted", "in_transit"].includes(o.status)
   );
+
+  // Toggle layout: corrida ativa esconde header/filtros e expande mapa
+  const muralHeader = document.getElementById("mural-header");
+  const mapContainer = document.getElementById("map-container");
+  const targetMapHeight = myActive ? "42%" : "32%";
+  if (mapContainer && mapContainer.style.height !== targetMapHeight) {
+    mapContainer.style.height = targetMapHeight;
+    invalidateDriverMapSize();
+  }
+  if (myActive) {
+    if (muralHeader) muralHeader.classList.add("hidden");
+  } else {
+    if (muralHeader) muralHeader.classList.remove("hidden");
+  }
+
   if (myActive) {
     el.innerHTML = renderActiveDelivery(myActive);
     const pill = document.getElementById("orders-count-pill");
@@ -500,33 +518,28 @@ function renderAvailableOrderCard(o) {
     : null;
 
   return `
-    <div class="bg-white rounded-2xl p-4 shadow-md border border-gray-100 active:scale-[0.99] transition">
-      <div class="flex justify-between items-start mb-2">
-        <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-2 mb-1">
-            <span class="bg-accent/15 text-primary text-[10px] font-black px-2 py-0.5 rounded-full uppercase flex items-center gap-1 whitespace-nowrap">
-              <i class="fa-solid ${itemIcon}"></i> ${o.itemType || "Item"}
-            </span>
-            <span class="bg-primary/10 text-primary text-[10px] font-black px-2 py-0.5 rounded-full uppercase whitespace-nowrap">${o.veh || "Moto"}</span>
-          </div>
+    <div class="bg-white rounded-2xl p-3 shadow-md border border-gray-100 active:scale-[0.99] transition">
+      <div class="flex justify-between items-start mb-1.5">
+        <div class="flex items-center gap-1.5 flex-1 min-w-0">
+          <span class="bg-accent/15 text-primary text-[10px] font-black px-2 py-0.5 rounded-full uppercase flex items-center gap-1 whitespace-nowrap">
+            <i class="fa-solid ${itemIcon}"></i> ${o.itemType || "Item"}
+          </span>
+          <span class="bg-primary/10 text-primary text-[10px] font-black px-2 py-0.5 rounded-full uppercase whitespace-nowrap">${o.veh || "Moto"}</span>
+          ${pickupLabel ? `<span class="bg-amber-100 text-amber-700 text-[10px] font-black px-2 py-0.5 rounded-full uppercase whitespace-nowrap"><i class="fa-solid fa-person-walking-arrow-right"></i> ${pickupLabel}</span>` : ""}
+          ${rideKm ? `<span class="bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-0.5 rounded-full uppercase whitespace-nowrap"><i class="fa-solid fa-route"></i> ${rideKm} km</span>` : ""}
         </div>
         <div class="text-right pl-2">
-          <p class="text-2xl font-black text-primary leading-none">R$&nbsp;${earning}</p>
+          <p class="text-xl font-black text-primary leading-none">R$&nbsp;${earning}</p>
           ${rsPerKm ? `<p class="text-[10px] font-bold text-gray-400 mt-0.5">R$ ${rsPerKm}/km</p>` : ""}
         </div>
       </div>
 
-      <div class="flex items-center gap-2 text-[11px] font-black uppercase tracking-wider mb-2.5">
-        ${pickupLabel ? `<span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full"><i class="fa-solid fa-person-walking-arrow-right"></i> ${pickupLabel} até origem</span>` : ""}
-        ${rideKm ? `<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full"><i class="fa-solid fa-route"></i> ${rideKm} km corrida</span>` : ""}
+      <div class="text-[12px] font-semibold space-y-0.5 mb-2 text-gray-700 leading-tight">
+        <p class="truncate"><i class="fa-solid fa-location-dot text-success w-4"></i> ${o.origin || "—"}</p>
+        <p class="truncate"><i class="fa-solid fa-flag-checkered text-danger w-4"></i> ${o.destination || "—"}</p>
       </div>
 
-      <div class="text-[13px] font-semibold space-y-1 mb-3 text-gray-700 leading-tight">
-        <p class="truncate"><i class="fa-solid fa-location-dot text-success w-4"></i> <b class="text-primary">De:</b> ${o.origin || "—"}</p>
-        <p class="truncate"><i class="fa-solid fa-flag-checkered text-danger w-4"></i> <b class="text-primary">Para:</b> ${o.destination || "—"}</p>
-      </div>
-
-      <button onclick="window.acceptOrderFromUI('${o.id}')" class="btn-accent w-full uppercase tracking-widest text-sm py-3">
+      <button onclick="window.acceptOrderFromUI('${o.id}')" class="btn-accent w-full uppercase tracking-widest text-sm py-2.5">
         <i class="fa-solid fa-bolt"></i> ACEITAR — R$&nbsp;${earning}
       </button>
     </div>`;
@@ -537,54 +550,45 @@ function renderActiveDelivery(o) {
   const isInTransit = o.status === "in_transit";
   const km = o.distanceKm ? `${Number(o.distanceKm).toFixed(1)} km` : "";
 
-  // Navegação: origem se ainda não coletou, destino se já em trânsito
+  // Navegação: sempre abre o Google Maps. Se temos coordenadas exatas
+  // usamos lat,lng (mais preciso); se não, cai no endereço em texto
+  // — melhor que o motorista ter que copiar manualmente.
   const target = isInTransit ? o.destCoords : o.originCoords;
-  const targetAddr = isInTransit ? (o.destination || "destino") : (o.origin || "origem");
+  const targetAddr = isInTransit ? (o.destination || "") : (o.origin || "");
   const navLabel = isInTransit ? "IR PRO DESTINO" : "IR PRA ORIGEM";
-  const navBtn = (target?.length === 2)
-    ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${target[0]},${target[1]}&travelmode=driving" target="_blank" class="block w-full text-center py-4 bg-accent text-primary font-black uppercase text-base tracking-widest rounded-2xl shadow-lg active:scale-[0.98] transition mb-2"><i class="fa-solid fa-route mr-2"></i> ${navLabel} (GOOGLE MAPS)</a>`
-    : `<div class="w-full text-center py-3 bg-white/10 text-white/60 font-bold text-sm rounded-2xl mb-2"><i class="fa-solid fa-map-location-dot"></i> Navegue até: ${targetAddr}</div>`;
+  const gmapsDest = (target?.length === 2)
+    ? `${target[0]},${target[1]}`
+    : encodeURIComponent(targetAddr || "");
+  const gmapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${gmapsDest}&travelmode=driving`;
 
   return `
-    <div class="card-primary-gradient p-5">
-      <p class="text-xs font-black text-accent uppercase tracking-widest mb-3">
+    <div class="card-primary-gradient p-4">
+      <p class="text-[11px] font-black text-accent uppercase tracking-widest mb-2">
         <i class="fa-solid fa-circle-dot fa-beat-fade"></i> ${isInTransit ? "Em trânsito" : "Coleta em andamento"} — R$ ${earning}${km ? ` · ${km}` : ""}
       </p>
-      <div class="text-sm font-bold space-y-2 mb-4 text-white">
-        <p><i class="fa-solid fa-location-dot text-accent w-5"></i> <b>De:</b> ${o.origin || "—"}</p>
-        <p><i class="fa-solid fa-flag-checkered text-accent w-5"></i> <b>Para:</b> ${o.destination || "—"}</p>
+      <div class="text-[13px] font-bold space-y-1 mb-3 text-white leading-tight">
+        <p class="truncate"><i class="fa-solid fa-location-dot text-accent w-4"></i> <b>De:</b> ${o.origin || "—"}</p>
+        <p class="truncate"><i class="fa-solid fa-flag-checkered text-accent w-4"></i> <b>Para:</b> ${o.destination || "—"}</p>
       </div>
 
-      ${navBtn}
+      <!-- AÇÃO PRIMÁRIA: navegação (sempre visível, sempre clicável) -->
+      <a href="${gmapsUrl}" target="_blank" class="block w-full text-center py-4 bg-accent text-primary font-black uppercase text-base tracking-widest rounded-2xl shadow-lg active:scale-[0.98] transition mb-2">
+        <i class="fa-solid fa-route mr-2"></i> ${navLabel} (GOOGLE MAPS)
+      </a>
 
+      <!-- AÇÃO SECUNDÁRIA: confirmar coleta ou entrega -->
       ${
         isInTransit
-          ? `
-            <div class="bg-white/10 border border-accent/40 rounded-2xl p-3 mb-3 text-xs text-white/90 leading-relaxed">
-              <p class="font-extrabold text-accent uppercase tracking-widest mb-1"><i class="fa-solid fa-circle-info"></i> Como finalizar</p>
-              <ol class="list-decimal list-inside space-y-0.5">
-                <li>Entregue o produto ao cliente</li>
-                <li>Peça pro cliente <b>assinar na tela</b></li>
-                <li>Tire <b>1 foto</b> do produto entregue</li>
-                <li>Toque em <b>CONFIRMAR ENTREGA</b> abaixo</li>
-              </ol>
-            </div>
-            <button onclick="window.openPODFromUI('${o.id}')" class="btn-success w-full uppercase tracking-widest text-base shadow-lg animate-pulse"><i class="fa-solid fa-signature"></i> CONFIRMAR ENTREGA (ASSINATURA + FOTO)</button>
-          `
-          : `
-            <div class="bg-white/10 border border-accent/40 rounded-2xl p-3 mb-3 text-xs text-white/90 leading-relaxed">
-              <p class="font-extrabold text-accent uppercase tracking-widest mb-1"><i class="fa-solid fa-circle-info"></i> Próximo passo</p>
-              <p>Toque no bot\u00e3o acima pra navegar at\u00e9 a origem. Ao chegar, colete o produto e tire uma foto pra comprovar.</p>
-            </div>
-            <button onclick="window.openPickupPhoto('${o.id}')" class="btn-accent w-full uppercase tracking-widest text-base"><i class="fa-solid fa-camera"></i> CONFIRMAR COLETA (FOTO)</button>
-          `
+          ? `<button onclick="window.openPODFromUI('${o.id}')" class="btn-success w-full uppercase tracking-widest text-sm shadow-lg animate-pulse"><i class="fa-solid fa-signature"></i> CONFIRMAR ENTREGA</button>`
+          : `<button onclick="window.openPickupPhoto('${o.id}')" class="btn-accent w-full uppercase tracking-widest text-sm"><i class="fa-solid fa-camera"></i> CONFIRMAR COLETA (FOTO)</button>`
       }
 
-      <div class="mt-4 bg-white/5 border border-white/10 rounded-2xl p-3">
-        <div class="flex items-center justify-between mb-2">
-          <p class="text-[11px] font-black text-accent uppercase tracking-widest"><i class="fa-solid fa-comments"></i> Chat com o cliente</p>
-          <span class="text-[10px] text-white/50">privado, só aqui</span>
-        </div>
+      <!-- CHAT COLAPSADO — só abre se motorista quiser -->
+      <button id="chat-toggle-btn" onclick="window.toggleChatPanel()" class="mt-3 w-full bg-white/10 hover:bg-white/15 border border-white/10 rounded-2xl px-3 py-2 flex items-center justify-between text-white text-xs font-bold uppercase tracking-widest active:scale-[0.99] transition">
+        <span><i class="fa-solid fa-comments text-accent mr-2"></i>Chat com o cliente <span id="chat-badge" class="hidden ml-1 bg-accent text-primary text-[10px] px-1.5 py-0.5 rounded-full"></span></span>
+        <span id="chat-caret" class="text-accent"><i class="fa-solid fa-chevron-down"></i></span>
+      </button>
+      <div id="chat-panel" class="hidden mt-2 bg-white/5 border border-white/10 rounded-2xl p-3">
         <div id="chat-messages" class="bg-white/10 rounded-xl p-2 mb-2 max-h-40 overflow-y-auto flex flex-col gap-1.5"></div>
         <div class="flex gap-2">
           <input id="chat-input" type="text" maxlength="500" placeholder="Mensagem…" class="flex-1 bg-white/95 text-primary text-sm px-3 py-2 rounded-xl outline-none" onkeydown="if(event.key==='Enter'){event.preventDefault();window.sendChatFromUI();}" />
@@ -616,12 +620,15 @@ function subscribeChat(orderId) {
   unsubscribeChat();
   chatMessages = [];
   chatLastMsgCount = 0;
+  chatUnread = 0;
   unsubMessages = subscribeMessages(orderId, (msgs) => {
     chatMessages = msgs;
-    // Beep curto quando chega mensagem nova do cliente
+    // Beep + incrementa badge quando chega mensagem nova do cliente
     if (msgs.length > chatLastMsgCount) {
-      const last = msgs[msgs.length - 1];
-      if (last && last.from === "customer" && chatLastMsgCount > 0) {
+      const newOnes = msgs.slice(chatLastMsgCount);
+      const newFromCustomer = newOnes.filter((m) => m && m.from === "customer").length;
+      if (newFromCustomer > 0 && chatLastMsgCount > 0) {
+        if (!chatOpen) chatUnread += newFromCustomer;
         try {
           const Ctx = window.AudioContext || window.webkitAudioContext;
           const ctx = new Ctx();
@@ -647,9 +654,42 @@ function unsubscribeChat() {
   if (unsubMessages) { unsubMessages(); unsubMessages = null; }
   chatMessages = [];
   chatLastMsgCount = 0;
+  chatOpen = false;
+  chatUnread = 0;
 }
 
+function updateChatBadge() {
+  const badge = document.getElementById("chat-badge");
+  if (!badge) return;
+  if (chatUnread > 0) {
+    badge.textContent = String(chatUnread);
+    badge.classList.remove("hidden");
+  } else {
+    badge.classList.add("hidden");
+  }
+}
+
+function toggleChatPanel() {
+  const panel = document.getElementById("chat-panel");
+  const caret = document.getElementById("chat-caret");
+  if (!panel) return;
+  chatOpen = panel.classList.contains("hidden"); // se estava hidden, agora vai abrir
+  panel.classList.toggle("hidden");
+  if (caret) caret.innerHTML = chatOpen ? '<i class="fa-solid fa-chevron-up"></i>' : '<i class="fa-solid fa-chevron-down"></i>';
+  if (chatOpen) {
+    chatUnread = 0;
+    updateChatBadge();
+    // Foca no input pra digitar rápido + scroll pro fim
+    const list = document.getElementById("chat-messages");
+    if (list) list.scrollTop = list.scrollHeight;
+    const input = document.getElementById("chat-input");
+    if (input) setTimeout(() => input.focus(), 50);
+  }
+}
+window.toggleChatPanel = toggleChatPanel;
+
 function renderChatPanel() {
+  updateChatBadge();
   const list = document.getElementById("chat-messages");
   if (!list) return;
   if (chatMessages.length === 0) {

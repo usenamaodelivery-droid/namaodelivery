@@ -141,6 +141,12 @@ export function updateDriverPosition(lat, lng) {
 }
 
 /** Centraliza mapa na localização atual do entregador. */
+export function invalidateDriverMapSize() {
+  if (!mapDriver) return;
+  // Defer pra próxima frame pra garantir que o resize do container já foi aplicado
+  requestAnimationFrame(() => mapDriver.invalidateSize());
+}
+
 export function centerDriverMap() {
   if (!mapDriver) return;
   if (lastUserCoords) {
