@@ -533,16 +533,24 @@ function renderAvailableOrderCard(o) {
     ? (o.price * DRIVER_SHARE / Number(rideKm)).toFixed(2).replace(".", ",")
     : null;
 
+  // Info do cliente + estabelecimento + descrição do item — motorista decide informado
+  const shortId = (o.id || "").slice(-6).toUpperCase();
+  const customer = o.customerName || "Cliente";
+  const merchant = o.merchantName || o.storeName || null;
+  const itemDesc = o.itemDescription || o.itemDetails || null;
+  const itemTitle = itemDesc || o.itemType || "Item";
+
   return `
-    <div class="bg-white rounded-2xl p-3 shadow-md border border-gray-100 active:scale-[0.99] transition">
+    <div class="bg-white rounded-2xl p-3 shadow-md border border-gray-100 active:scale-[0.99] transition cursor-pointer" onclick="window.openOrderDetails('${o.id}')">
       <div class="flex justify-between items-start mb-1.5">
-        <div class="flex items-center gap-1.5 flex-1 min-w-0">
+        <div class="flex items-center gap-1.5 flex-1 min-w-0 flex-wrap">
           <span class="bg-accent/15 text-primary text-[10px] font-black px-2 py-0.5 rounded-full uppercase flex items-center gap-1 whitespace-nowrap">
             <i class="fa-solid ${itemIcon}"></i> ${o.itemType || "Item"}
           </span>
           <span class="bg-primary/10 text-primary text-[10px] font-black px-2 py-0.5 rounded-full uppercase whitespace-nowrap">${o.veh || "Moto"}</span>
           ${pickupLabel ? `<span class="bg-amber-100 text-amber-700 text-[10px] font-black px-2 py-0.5 rounded-full uppercase whitespace-nowrap"><i class="fa-solid fa-person-walking-arrow-right"></i> ${pickupLabel}</span>` : ""}
           ${rideKm ? `<span class="bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-0.5 rounded-full uppercase whitespace-nowrap"><i class="fa-solid fa-route"></i> ${rideKm} km</span>` : ""}
+          <span class="bg-gray-100 text-gray-500 text-[10px] font-black px-2 py-0.5 rounded-full uppercase whitespace-nowrap">#${shortId}</span>
         </div>
         <div class="text-right pl-2">
           <p class="text-xl font-black text-primary leading-none">R$&nbsp;${earning}</p>
@@ -550,16 +558,95 @@ function renderAvailableOrderCard(o) {
         </div>
       </div>
 
+      <p class="text-[13px] font-extrabold text-primary mb-1 truncate"><i class="fa-solid fa-bag-shopping text-accent w-4"></i> ${itemTitle}${merchant ? ` <span class="font-semibold text-gray-500">· ${merchant}</span>` : ""}</p>
+      <p class="text-[11px] font-bold text-gray-500 mb-2 truncate"><i class="fa-solid fa-user w-4"></i> ${customer}</p>
+
       <div class="text-[12px] font-semibold space-y-0.5 mb-2 text-gray-700 leading-tight">
         <p class="truncate"><i class="fa-solid fa-location-dot text-success w-4"></i> ${o.origin || "—"}</p>
         <p class="truncate"><i class="fa-solid fa-flag-checkered text-danger w-4"></i> ${o.destination || "—"}</p>
       </div>
 
-      <button onclick="window.acceptOrderFromUI('${o.id}')" class="btn-accent w-full uppercase tracking-widest text-sm py-2.5">
+      <button onclick="event.stopPropagation();window.acceptOrderFromUI('${o.id}')" class="btn-accent w-full uppercase tracking-widest text-sm py-2.5">
         <i class="fa-solid fa-bolt"></i> ACEITAR — R$&nbsp;${earning}
       </button>
     </div>`;
 }
+
+// Modal de detalhes da corrida — abre ao tocar em qualquer card disponível
+// ou no status pill durante corrida ativa. Mostra TUDO que o motorista
+// precisa pra decidir / executar: item, cliente, endereço completo, valor,
+// observações, distância.
+function openOrderDetails(orderId) {
+  const o = orders.find((x) => x.id === orderId);
+  if (!o) return;
+  const earning = (o.price * DRIVER_SHARE).toFixed(2).replace(".", ",");
+  const total = (Number(o.price) || 0).toFixed(2).replace(".", ",");
+  const km = o.distanceKm ? `${Number(o.distanceKm).toFixed(1)} km` : "—";
+  const shortId = (o.id || "").slice(-6).toUpperCase();
+  const customer = o.customerName || "Cliente";
+  const merchant = o.merchantName || o.storeName || "—";
+  const itemDesc = o.itemDescription || o.itemDetails || o.itemType || "—";
+  const notes = o.notes || o.observations || "";
+  const isPending = o.status === "pending";
+  const driverPos = getDriverPosition();
+  const pickupKm =
+    driverPos && o.originCoords?.length === 2
+      ? haversineKm(driverPos, o.originCoords).toFixed(1) + " km"
+      : "—";
+
+  const modal = document.getElementById("order-details-modal");
+  const body = document.getElementById("order-details-body");
+  if (!modal || !body) return;
+
+  body.innerHTML = `
+    <div class="space-y-3 text-left">
+      <div class="bg-gray-50 rounded-xl p-3 border border-gray-100">
+        <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Pedido #${shortId}</p>
+        <p class="text-base font-black text-primary mt-0.5"><i class="fa-solid fa-bag-shopping text-accent mr-1"></i> ${itemDesc}</p>
+        <p class="text-xs font-semibold text-gray-500 mt-0.5">Estabelecimento: <b class="text-primary">${merchant}</b></p>
+      </div>
+      <div class="bg-gray-50 rounded-xl p-3 border border-gray-100">
+        <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Cliente</p>
+        <p class="text-sm font-extrabold text-primary mt-0.5"><i class="fa-solid fa-user mr-1"></i> ${customer}</p>
+        <p class="text-[10px] font-bold text-gray-400 mt-0.5">Telefone do cliente nunca aparece — fala com ele só pelo chat interno.</p>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div class="bg-gray-50 rounded-xl p-3 border border-gray-100">
+          <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Você ganha</p>
+          <p class="text-xl font-black text-success">R$ ${earning}</p>
+          <p class="text-[10px] font-bold text-gray-400">de R$ ${total} (85%)</p>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-3 border border-gray-100">
+          <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Distância</p>
+          <p class="text-xl font-black text-primary">${km}</p>
+          <p class="text-[10px] font-bold text-gray-400">você → origem ${pickupKm}</p>
+        </div>
+      </div>
+      <div class="bg-gray-50 rounded-xl p-3 border border-gray-100">
+        <p class="text-[10px] font-black uppercase tracking-widest text-success"><i class="fa-solid fa-location-dot"></i> Origem (coleta)</p>
+        <p class="text-sm font-bold text-primary mt-0.5">${o.origin || "—"}</p>
+      </div>
+      <div class="bg-gray-50 rounded-xl p-3 border border-gray-100">
+        <p class="text-[10px] font-black uppercase tracking-widest text-danger"><i class="fa-solid fa-flag-checkered"></i> Destino (entrega)</p>
+        <p class="text-sm font-bold text-primary mt-0.5">${o.destination || "—"}</p>
+      </div>
+      ${notes ? `<div class="bg-amber-50 rounded-xl p-3 border border-amber-200">
+        <p class="text-[10px] font-black uppercase tracking-widest text-amber-700"><i class="fa-solid fa-circle-info"></i> Observações</p>
+        <p class="text-sm font-semibold text-primary mt-0.5">${String(notes).replace(/</g, "&lt;")}</p>
+      </div>` : ""}
+      ${isPending
+        ? `<button onclick="window.acceptOrderFromUI('${o.id}');window.closeOrderDetails();" class="btn-accent w-full uppercase tracking-widest text-base py-3 mt-2"><i class="fa-solid fa-bolt"></i> ACEITAR — R$ ${earning}</button>`
+        : ""}
+      <button onclick="window.closeOrderDetails()" class="w-full py-3 text-gray-500 font-extrabold uppercase text-sm">Fechar</button>
+    </div>`;
+  modal.classList.remove("hidden");
+}
+function closeOrderDetails() {
+  const modal = document.getElementById("order-details-modal");
+  if (modal) modal.classList.add("hidden");
+}
+window.openOrderDetails = openOrderDetails;
+window.closeOrderDetails = closeOrderDetails;
 
 // Popula a UI de corrida ativa (status pill + botões). Layout estilo iFood/Uber:
 // mapa fullscreen, status fininho no topo, botões grandes fixos no rodapé,
@@ -569,14 +656,23 @@ function populateActiveDeliveryUI(o) {
   const isInTransit = o.status === "in_transit";
   const km = o.distanceKm ? `${Number(o.distanceKm).toFixed(1)} km` : "";
 
-  // Texto do status pill (1 linha de status + 1 linha com endereço)
-  const line1Text = `${isInTransit ? "Em trânsito" : "Coleta em andamento"} — R$ ${earning}${km ? ` · ${km}` : ""}`;
+  // Texto do status pill (status + endereço + cliente · item)
+  const shortId = (o.id || "").slice(-6).toUpperCase();
+  const line1Text = `${isInTransit ? "Em trânsito" : "Coleta em andamento"} — R$ ${earning}${km ? ` · ${km}` : ""} · #${shortId}`;
   const line2Label = isInTransit ? "Para:" : "Origem:";
   const line2Addr = isInTransit ? (o.destination || "—") : (o.origin || "—");
+  const customer = o.customerName || "Cliente";
+  const itemDesc = o.itemDescription || o.itemDetails || o.itemType || "";
+  const line3Text = itemDesc ? `${customer} · ${itemDesc}` : customer;
   const line1 = document.getElementById("active-status-line1");
   const line2 = document.getElementById("active-status-line2");
+  const line3 = document.getElementById("active-status-line3");
   if (line1) line1.textContent = line1Text;
   if (line2) line2.textContent = `${line2Label} ${line2Addr}`;
+  if (line3) line3.textContent = line3Text;
+  // Guarda id pra abrir detalhes ao tocar no pill
+  const pill = document.getElementById("active-status-pill");
+  if (pill) pill.dataset.orderId = o.id;
 
   // Botão IR PRO DESTINO / PRA ORIGEM — sempre clicável (fallback pra texto)
   const target = isInTransit ? o.destCoords : o.originCoords;
@@ -614,6 +710,14 @@ function activeConfirmAction() {
   }
 }
 window.activeConfirmAction = activeConfirmAction;
+
+// Abre o modal de detalhes da corrida ativa (toca o status pill)
+function openActiveOrderDetails() {
+  const pill = document.getElementById("active-status-pill");
+  const id = pill?.dataset.orderId;
+  if (id) openOrderDetails(id);
+}
+window.openActiveOrderDetails = openActiveOrderDetails;
 
 function syncActiveDeliveryOnMap() {
   if (!currentUser) return;

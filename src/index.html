@@ -112,11 +112,13 @@
                         </div>
                     </div>
 
-                    <!-- Status pill durante corrida ativa (1 linha fina sobre o mapa) -->
-                    <div id="active-status-pill" class="hidden absolute top-3 left-3 right-3 bg-primary/95 backdrop-blur rounded-2xl shadow-xl border border-accent/40 px-4 py-2.5" style="z-index: 1000;">
+                    <!-- Status pill durante corrida ativa (toca pra ver detalhes completos) -->
+                    <button id="active-status-pill" type="button" onclick="window.openActiveOrderDetails()" class="hidden absolute top-3 left-3 right-3 bg-primary/95 backdrop-blur rounded-2xl shadow-xl border border-accent/40 px-4 py-2.5 text-left active:scale-[0.99] transition" style="z-index: 1000;">
                         <p id="active-status-line1" class="text-[10px] font-black text-accent uppercase tracking-widest leading-none mb-0.5"></p>
                         <p id="active-status-line2" class="text-sm font-bold text-white leading-tight truncate"></p>
-                    </div>
+                        <p id="active-status-line3" class="text-[11px] font-semibold text-white/80 leading-tight truncate mt-0.5"></p>
+                        <p class="text-[9px] font-bold text-accent/80 mt-1 leading-none"><i class="fa-solid fa-circle-info"></i> Toque para ver detalhes do pedido</p>
+                    </button>
 
                     <!-- Action bar fixa no rodapé do mapa (sobre o mapa, acima do bottom nav) -->
                     <div id="active-action-bar" class="hidden absolute left-3 right-3 flex flex-col gap-2" style="bottom: 12px; z-index: 1000;">
@@ -159,6 +161,17 @@
                     </div>
                     <div class="px-4 pb-4 overflow-y-auto no-scrollbar flex-1">
                         <div id="available-orders-list" class="space-y-3"></div>
+                    </div>
+                </div>
+
+                <!-- Modal de detalhes da corrida (toca o card / pill) -->
+                <div id="order-details-modal" class="hidden absolute inset-0 bg-black/50 backdrop-blur-sm flex flex-col justify-end" style="z-index: 1500;" onclick="if(event.target.id==='order-details-modal')window.closeOrderDetails()">
+                    <div class="bg-white rounded-t-3xl shadow-2xl flex flex-col" style="max-height: 90%;" onclick="event.stopPropagation()">
+                        <div class="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+                            <p class="text-base font-black text-primary"><i class="fa-solid fa-receipt text-accent mr-2"></i>Detalhes do Pedido</p>
+                            <button onclick="window.closeOrderDetails()" class="text-primary text-xl p-2 active:scale-95"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <div id="order-details-body" class="px-4 py-4 overflow-y-auto flex-1"></div>
                     </div>
                 </div>
 
@@ -346,7 +359,7 @@
                     <button onclick="signOutUser()" class="w-full bg-red-50 text-danger font-extrabold py-4 rounded-2xl shadow-sm border-2 border-red-200 hover:bg-red-100 transition text-base">
                         <i class="fa-solid fa-right-from-bracket mr-2"></i> Sair da Conta
                     </button>
-                    <p class="text-center text-xs text-gray-400 mt-2 font-semibold">Delivery NaMão v1.5.9 · App do Entregador</p>
+                    <p class="text-center text-xs text-gray-400 mt-2 font-semibold">Delivery NaMão v1.6.0 · App do Entregador</p>
                 </div>
             </main>
 
