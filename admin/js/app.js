@@ -25,8 +25,13 @@ const ROUTES = {
 };
 
 const DEFAULT_ROUTE = "dashboard";
+const AUTO_REFRESH_MS = 30 * 1000;
+// Seções com formulário/edição não devem auto-refresh (perderia o input do user)
+const NO_AUTO_REFRESH = new Set(["config", "broadcast"]);
 
 let cleanupSection = null;
+let currentRoute = null;
+let autoRefreshTimer = null;
 
 function setActiveSidebar(route) {
   document.querySelectorAll("[data-route]").forEach((a) => {
@@ -34,29 +39,66 @@ function setActiveSidebar(route) {
   });
 }
 
-async function navigate(route) {
+async function navigate(route, opts = {}) {
+  const isRefresh = !!opts.refresh;
   const def = ROUTES[route] || ROUTES[DEFAULT_ROUTE];
+  currentRoute = route in ROUTES ? route : DEFAULT_ROUTE;
   if (cleanupSection) {
     try { cleanupSection(); } catch (e) {}
     cleanupSection = null;
   }
   document.getElementById("page-title").textContent = def.title;
   document.getElementById("page-subtitle").textContent = def.subtitle || "";
-  document.getElementById("page-actions").innerHTML = "";
+  if (!isRefresh) document.getElementById("page-actions").innerHTML = "";
   const content = document.getElementById("page-content");
-  content.innerHTML = `<div class="text-center py-12 text-slate-400"><i class="fa-solid fa-spinner fa-spin text-2xl"></i><p class="mt-2 text-sm">Carregando...</p></div>`;
+  if (!isRefresh) {
+    content.innerHTML = `<div class="text-center py-12 text-slate-400"><i class="fa-solid fa-spinner fa-spin text-2xl"></i><p class="mt-2 text-sm">Carregando...</p></div>`;
+  }
   setActiveSidebar(route);
   try {
     const cleanup = await def.render({
       content,
       actionsRoot: document.getElementById("page-actions"),
       navigate,
+      isRefresh,
     });
     cleanupSection = typeof cleanup === "function" ? cleanup : null;
+    updateRefreshIndicator();
   } catch (e) {
     console.error(e);
-    content.innerHTML = `<div class="text-center py-12 text-danger"><i class="fa-solid fa-triangle-exclamation text-2xl"></i><p class="mt-2 text-sm">Erro ao carregar: ${e.message}</p></div>`;
+    if (!isRefresh) {
+      content.innerHTML = `<div class="text-center py-12 text-danger"><i class="fa-solid fa-triangle-exclamation text-2xl"></i><p class="mt-2 text-sm">Erro ao carregar: ${e.message}</p></div>`;
+    }
   }
+  scheduleAutoRefresh();
+}
+
+function updateRefreshIndicator() {
+  const el = document.getElementById("refresh-indicator");
+  if (!el) return;
+  const t = new Date();
+  const hh = String(t.getHours()).padStart(2, "0");
+  const mm = String(t.getMinutes()).padStart(2, "0");
+  const ss = String(t.getSeconds()).padStart(2, "0");
+  if (NO_AUTO_REFRESH.has(currentRoute)) {
+    el.innerHTML = `<i class="fa-solid fa-pause text-slate-400"></i> Atualização automática pausada`;
+  } else {
+    el.innerHTML = `<i class="fa-solid fa-arrows-rotate text-accent"></i> Atualizado ${hh}:${mm}:${ss} · auto a cada 30s`;
+  }
+}
+
+function scheduleAutoRefresh() {
+  if (autoRefreshTimer) clearTimeout(autoRefreshTimer);
+  if (NO_AUTO_REFRESH.has(currentRoute)) return;
+  autoRefreshTimer = setTimeout(() => {
+    if (document.hidden) {
+      // Aba escondida — não atualiza pra economizar leituras Firestore.
+      // Reagenda pra checar de novo daqui a pouco.
+      scheduleAutoRefresh();
+      return;
+    }
+    navigate(currentRoute, { refresh: true });
+  }, AUTO_REFRESH_MS);
 }
 
 function handleHash() {
@@ -78,6 +120,13 @@ function showApp() {
   document.getElementById("user-info").textContent = u?.email || "";
   handleHash();
 }
+
+// Quando a aba volta a ficar visível, atualiza imediatamente.
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && currentRoute && !NO_AUTO_REFRESH.has(currentRoute)) {
+    navigate(currentRoute, { refresh: true });
+  }
+});
 
 // === Login form ===
 document.getElementById("login-form").addEventListener("submit", async (e) => {
