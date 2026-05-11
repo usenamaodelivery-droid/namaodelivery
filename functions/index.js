@@ -11,6 +11,7 @@
 const { onCall, HttpsError, onRequest } = require("firebase-functions/v2/https");
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { setGlobalOptions } = require("firebase-functions/v2");
+const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 
 admin.initializeApp();
@@ -18,9 +19,16 @@ setGlobalOptions({ region: "southamerica-east1", maxInstances: 10 });
 
 const APP_ID = "namao-delivery-prod";
 const BOOTSTRAP_EMAIL = process.env.ADMIN_BOOTSTRAP_EMAIL || "";
-const MP_ACCESS_TOKEN = process.env.MERCADOPAGO_ACCESS_TOKEN || "";
 const PLATFORM_FEE = 0.15; // 15% fica com a empresa, 85% repassa pro motorista
 const DRIVER_SHARE = 1 - PLATFORM_FEE;
+
+// Mercado Pago — secrets armazenados via `firebase functions:secrets:set`
+const MP_ACCESS_TOKEN_SECRET = defineSecret("MERCADOPAGO_ACCESS_TOKEN");
+const MP_WEBHOOK_SECRET = defineSecret("MERCADOPAGO_WEBHOOK_SECRET");
+
+function getMpToken() {
+  return MP_ACCESS_TOKEN_SECRET.value() || process.env.MERCADOPAGO_ACCESS_TOKEN || "";
+}
 
 exports.setAdminClaim = onCall(async (request) => {
   const { targetUid, admin: makeAdmin } = request.data || {};
@@ -145,7 +153,9 @@ exports.onOrderStatusChanged = onDocumentUpdated(
  * Recebe notificações de payment + payout. Quando um pagamento PIX é
  * aprovado, atualiza o pedido pra status="pending" (libera pros motoristas).
  */
-exports.mercadopagoWebhook = onRequest({ cors: false, invoker: "public" }, async (req, res) => {
+exports.mercadopagoWebhook = onRequest(
+  { cors: false, invoker: "public", secrets: [MP_ACCESS_TOKEN_SECRET, MP_WEBHOOK_SECRET] },
+  async (req, res) => {
   try {
     const type = req.body?.type || req.query?.type;
     const dataId = req.body?.data?.id || req.query?.["data.id"];
@@ -156,7 +166,7 @@ exports.mercadopagoWebhook = onRequest({ cors: false, invoker: "public" }, async
 
     if (type === "payment") {
       const r = await fetch(`https://api.mercadopago.com/v1/payments/${dataId}`, {
-        headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` },
+        headers: { Authorization: `Bearer ${getMpToken()}` },
       });
       if (!r.ok) {
         console.error("MP payment fetch failed", r.status);
@@ -207,10 +217,10 @@ exports.mercadopagoWebhook = onRequest({ cors: false, invoker: "public" }, async
  * Chamado pelo PWA na criação do pedido. Cria o pagamento PIX no MP, salva
  * o paymentId no doc do pedido, e retorna o QR Code base64 + copia-cola.
  */
-exports.createOrderPix = onCall(async (request) => {
+exports.createOrderPix = onCall({ secrets: [MP_ACCESS_TOKEN_SECRET] }, async (request) => {
   const auth = request.auth;
   if (!auth) throw new HttpsError("unauthenticated", "Login obrigatório");
-  if (!MP_ACCESS_TOKEN) throw new HttpsError("failed-precondition", "MP token não configurado");
+  if (!getMpToken()) throw new HttpsError("failed-precondition", "MP token não configurado");
 
   const { orderId } = request.data || {};
   if (!orderId) throw new HttpsError("invalid-argument", "orderId obrigatório");
@@ -241,7 +251,7 @@ exports.createOrderPix = onCall(async (request) => {
   const r = await fetch("https://api.mercadopago.com/v1/payments", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${MP_ACCESS_TOKEN}`,
+      Authorization: `Bearer ${getMpToken()}`,
       "Content-Type": "application/json",
       "X-Idempotency-Key": idempotencyKey,
     },
@@ -290,10 +300,10 @@ exports.createOrderPix = onCall(async (request) => {
  * Cliente cancela um pedido não-aceito e recebe estorno.
  * Só funciona se o pedido ainda não foi aceito por um motorista.
  */
-exports.refundOrder = onCall(async (request) => {
+exports.refundOrder = onCall({ secrets: [MP_ACCESS_TOKEN_SECRET] }, async (request) => {
   const auth = request.auth;
   if (!auth) throw new HttpsError("unauthenticated", "Login obrigatório");
-  if (!MP_ACCESS_TOKEN) throw new HttpsError("failed-precondition", "MP token não configurado");
+  if (!getMpToken()) throw new HttpsError("failed-precondition", "MP token não configurado");
 
   const { orderId } = request.data || {};
   if (!orderId) throw new HttpsError("invalid-argument", "orderId obrigatório");
@@ -319,7 +329,7 @@ exports.refundOrder = onCall(async (request) => {
   const r = await fetch(`https://api.mercadopago.com/v1/payments/${order.paymentId}/refunds`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${MP_ACCESS_TOKEN}`,
+      Authorization: `Bearer ${getMpToken()}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({}),
@@ -354,10 +364,10 @@ exports.refundOrder = onCall(async (request) => {
  * O webhook MP confirma o payout via outra notificação e atualiza
  * payoutStatus pra "completed".
  */
-exports.requestDriverPayout = onCall(async (request) => {
+exports.requestDriverPayout = onCall({ secrets: [MP_ACCESS_TOKEN_SECRET] }, async (request) => {
   const auth = request.auth;
   if (!auth) throw new HttpsError("unauthenticated", "Login obrigatório");
-  if (!MP_ACCESS_TOKEN) throw new HttpsError("failed-precondition", "MP token não configurado");
+  if (!getMpToken()) throw new HttpsError("failed-precondition", "MP token não configurado");
 
   const uid = auth.uid;
   const profileRef = admin
@@ -424,7 +434,7 @@ exports.requestDriverPayout = onCall(async (request) => {
     const r = await fetch("https://api.mercadopago.com/v1/money_requests", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${MP_ACCESS_TOKEN}`,
+        Authorization: `Bearer ${getMpToken()}`,
         "Content-Type": "application/json",
         "X-Idempotency-Key": idempotencyKey,
       },
