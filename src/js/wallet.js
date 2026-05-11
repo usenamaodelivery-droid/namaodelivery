@@ -6,9 +6,9 @@
  *   - getDriverBalance: retorna saldo disponível + lista de entregas
  *   - requestDriverPayout: solicita repasse PIX dos ganhos
  */
+import { httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
 import { doc, setDoc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { db } from "./firebaseInit.js";
-import { apiCall } from "./apiClient.js";
+import { functions, db } from "./firebaseInit.js";
 
 const APP_ID = "namao-delivery-prod";
 
@@ -90,9 +90,10 @@ export async function saveDriverPixKey(uid, pixKey, pixKeyType) {
  */
 export async function fetchDriverBalance() {
   try {
-    const data = await apiCall("getDriverBalance");
-    cachedBalance = data;
-    return data;
+    const fn = httpsCallable(functions, "getDriverBalance");
+    const r = await fn({});
+    cachedBalance = r.data;
+    return r.data;
   } catch (e) {
     console.warn("[wallet] getDriverBalance failed", e);
     throw e;
@@ -103,7 +104,9 @@ export async function fetchDriverBalance() {
  * Solicita repasse PIX. Backend valida chave + soma + chama MP.
  */
 export async function requestPayout() {
-  return apiCall("requestDriverPayout");
+  const fn = httpsCallable(functions, "requestDriverPayout");
+  const r = await fn({});
+  return r.data;
 }
 
 /* ------------------------- UI ------------------------- */
