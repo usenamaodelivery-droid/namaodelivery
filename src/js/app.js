@@ -32,6 +32,12 @@ import {
   validatePOD
 } from "./pod.js";
 import {
+  openWallet,
+  closeWallet,
+  savePixKeyHandler,
+  requestPayoutHandler,
+} from "./wallet.js";
+import {
   confirmPix,
   setDriverStatus,
   subscribeSecurityLogs
@@ -1037,9 +1043,17 @@ Object.assign(window, {
     renderDriverMural();
   },
   openDriverWallet: () => {
-    if (!driverProfile) return;
-    const balance = Number(driverProfile.balance || 0).toFixed(2).replace(".", ",");
-    showToast(`Saldo atual: R$ ${balance}. Solicitação de saque registrada.`);
+    if (!currentUser) return;
+    openWallet(currentUser.uid);
+  },
+  closeDriverWallet: () => closeWallet(),
+  savePixKeyFromUI: () => {
+    if (!currentUser) return;
+    savePixKeyHandler(currentUser.uid);
+  },
+  requestPayoutFromUI: () => {
+    if (!currentUser) return;
+    requestPayoutHandler(currentUser.uid);
   },
   openWhatsAppSupport: () => window.open(`https://wa.me/${SUPPORT_WHATSAPP}`, "_blank"),
   testNewOrderSound,

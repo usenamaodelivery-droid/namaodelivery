@@ -100,7 +100,8 @@ service cloud.firestore {
         && !('balance' in request.resource.data);
 
       allow update: if (
-        // Próprio usuário: atualiza dados pessoais, nunca balance/status/claims
+        // Próprio usuário: atualiza dados pessoais (incluindo chave PIX),
+        // nunca balance/status/claims
         (isSelf(userId)
           && unchanged('status')
           && unchanged('balance')
@@ -119,6 +120,15 @@ service cloud.firestore {
       );
 
       allow delete: if isAdmin();
+    }
+
+    // Repasses (payouts) PIX pra motoristas. Escrita apenas via Cloud Function
+    // (Admin SDK bypassa rules). Cliente só lê os próprios payouts.
+    match /artifacts/namao-delivery-prod/payouts/{payoutId} {
+      allow read: if isSignedIn() && (
+        isAdmin() || resource.data.driverId == request.auth.uid
+      );
+      allow create, update, delete: if false; // só Cloud Function
     }
   }
 }

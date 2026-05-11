@@ -164,6 +164,17 @@
                     </div>
                 </div>
 
+                <!-- Modal carteira motorista (saldo + chave PIX + saque) -->
+                <div id="wallet-modal" class="hidden absolute inset-0 bg-black/50 backdrop-blur-sm flex flex-col justify-end" style="z-index: 1500;" onclick="if(event.target.id==='wallet-modal')window.closeDriverWallet()">
+                    <div class="bg-white rounded-t-3xl shadow-2xl flex flex-col" style="max-height: 92%;" onclick="event.stopPropagation()">
+                        <div class="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+                            <p class="text-base font-black text-primary"><i class="fa-solid fa-wallet text-accent mr-2"></i>Meus Ganhos</p>
+                            <button onclick="window.closeDriverWallet()" class="text-primary text-xl p-2 active:scale-95"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <div id="wallet-body" class="px-4 py-4 overflow-y-auto flex-1"></div>
+                    </div>
+                </div>
+
                 <!-- Modal de detalhes da corrida (toca o card / pill) -->
                 <div id="order-details-modal" class="hidden absolute inset-0 bg-black/50 backdrop-blur-sm flex flex-col justify-end" style="z-index: 1500;" onclick="if(event.target.id==='order-details-modal')window.closeOrderDetails()">
                     <div class="bg-white rounded-t-3xl shadow-2xl flex flex-col" style="max-height: 90%;" onclick="event.stopPropagation()">
@@ -359,7 +370,7 @@
                     <button onclick="signOutUser()" class="w-full bg-red-50 text-danger font-extrabold py-4 rounded-2xl shadow-sm border-2 border-red-200 hover:bg-red-100 transition text-base">
                         <i class="fa-solid fa-right-from-bracket mr-2"></i> Sair da Conta
                     </button>
-                    <p class="text-center text-xs text-gray-400 mt-2 font-semibold">Delivery NaMão v1.6.0 · App do Entregador</p>
+                    <p class="text-center text-xs text-gray-400 mt-2 font-semibold">Delivery NaMão v1.7.0 · App do Entregador</p>
                 </div>
             </main>
 
