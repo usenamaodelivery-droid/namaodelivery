@@ -8,6 +8,12 @@ service cloud.firestore {
     function isSelf(uid)    { return isSignedIn() && request.auth.uid == uid; }
     function unchanged(k)   { return request.resource.data[k] == resource.data[k]; }
 
+    // Collection group queries (admin dashboard) — sem isso, queries
+    // collectionGroup("profile") falham com "Missing or insufficient permissions".
+    match /{path=**}/profile/{docId} {
+      allow read: if isAdmin();
+    }
+
     match /artifacts/namao-delivery-prod/public/data/orders/{orderId} {
       allow read: if isSignedIn();
 
