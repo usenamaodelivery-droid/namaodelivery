@@ -130,5 +130,17 @@ service cloud.firestore {
       );
       allow create, update, delete: if false; // só Cloud Function
     }
+
+    // Comunicados (broadcast) — admin escreve, qualquer logado lê.
+    match /artifacts/namao-delivery-prod/public/data/broadcasts/{bcId} {
+      allow read:   if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Configurações gerais — admin escreve, qualquer logado lê.
+    match /artifacts/namao-delivery-prod/config/{docId} {
+      allow read:   if isSignedIn();
+      allow write:  if isAdmin();
+    }
   }
 }
