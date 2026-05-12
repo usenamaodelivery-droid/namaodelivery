@@ -1,28 +1,46 @@
 /**
  * Notificações de novos pedidos para o motorista.
  *
- * - Som "ding-ding-ding" alto (src/sounds/new-order.mp3)
- * - Vibração do celular (Capacitor + browser API)
- * - Repete 3x se motorista não interagir
- * - Local notification do Android (Capacitor) quando app em background
+ * - Som "alerta" alto (sounds/new-order.mp3) — TOCA EM LOOP até o motorista
+ *   acessar o pedido ou tocar o botão "silenciar".
+ * - Som curto pra mensagem nova do cliente (sounds/new-message.mp3).
+ * - Vibração do celular contínua durante alerta.
+ * - Local notification do Android (Capacitor) quando app em background via FCM.
+ * - WakeLock — mantém tela ligada durante alerta.
  *
  * Hook: chame `notifyNewOrder(order)` quando detectar um pedido novo
  * 'pending' no listener do Firestore.
  */
 
-const SOUND_URL = "sounds/new-order.mp3";
-let cachedAudio = null;
+const ORDER_SOUND_URL = "sounds/new-order.mp3";
+const MESSAGE_SOUND_URL = "sounds/new-message.mp3";
+let orderAudio = null;
+let messageAudio = null;
 let lastSeenOrderIds = new Set();
 let bootstrapped = false;
 let muted = false;
+let alertActive = false;
+let alertLoopId = null;
+let alertVibrateId = null;
+let wakeLock = null;
 
-function getAudio() {
-  if (!cachedAudio) {
-    cachedAudio = new Audio(SOUND_URL);
-    cachedAudio.preload = "auto";
-    cachedAudio.volume = 1.0;
+function getOrderAudio() {
+  if (!orderAudio) {
+    orderAudio = new Audio(ORDER_SOUND_URL);
+    orderAudio.preload = "auto";
+    orderAudio.volume = 1.0;
+    orderAudio.loop = false; // Loop manual pra controlar intervalo
   }
-  return cachedAudio;
+  return orderAudio;
+}
+
+function getMessageAudio() {
+  if (!messageAudio) {
+    messageAudio = new Audio(MESSAGE_SOUND_URL);
+    messageAudio.preload = "auto";
+    messageAudio.volume = 1.0;
+  }
+  return messageAudio;
 }
 
 function tryVibrate(pattern) {
@@ -33,32 +51,74 @@ function tryVibrate(pattern) {
   } catch { /* silencioso */ }
 }
 
-async function playSound(times = 1) {
+async function tryWakeLock() {
+  try {
+    if ("wakeLock" in navigator && !wakeLock) {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener?.("release", () => { wakeLock = null; });
+    }
+  } catch { /* sem wakelock, segue */ }
+}
+
+function releaseWakeLock() {
+  try { wakeLock?.release?.(); } catch { /* ignore */ }
+  wakeLock = null;
+}
+
+async function playOnce(audio) {
   if (muted) return;
-  const audio = getAudio();
-  for (let i = 0; i < times; i++) {
-    try {
-      audio.currentTime = 0;
-      await audio.play();
-    } catch (err) {
-      // Autoplay bloqueado — som só toca depois da primeira interação do usuário.
-      console.warn("[notifications] audio play blocked:", err?.message);
-      return;
-    }
-    if (i < times - 1) {
-      await new Promise((r) => setTimeout(r, 1300));
-    }
+  try {
+    audio.currentTime = 0;
+    await audio.play();
+  } catch (err) {
+    // Autoplay bloqueado — som só toca depois da primeira interação do usuário.
+    console.warn("[notifications] audio play blocked:", err?.message);
   }
+}
+
+/** Inicia o alerta de novo pedido em LOOP até `stopOrderAlert()`. */
+function startOrderAlert() {
+  if (alertActive) return;
+  alertActive = true;
+  const audio = getOrderAudio();
+  // Toca imediatamente
+  playOnce(audio);
+  // Vibração contínua via API: pattern repete enquanto vibrar não for chamado novamente
+  // Padrão agressivo: 0.6s vibra, 0.3s pausa, repete
+  alertVibrateId = setInterval(() => {
+    tryVibrate([600, 300, 600, 300, 600, 300]);
+  }, 2400);
+  // Repete o som a cada ~2s (o áudio em si é ~1.5s)
+  alertLoopId = setInterval(() => {
+    if (!alertActive) return;
+    playOnce(audio);
+  }, 2000);
+  tryWakeLock();
+}
+
+/** Para o alerta de novo pedido (chamado quando motorista toca em aceitar/dispensar). */
+export function stopOrderAlert() {
+  alertActive = false;
+  if (alertLoopId) { clearInterval(alertLoopId); alertLoopId = null; }
+  if (alertVibrateId) { clearInterval(alertVibrateId); alertVibrateId = null; }
+  try {
+    if (orderAudio) { orderAudio.pause(); orderAudio.currentTime = 0; }
+  } catch { /* ignore */ }
+  try { navigator.vibrate && navigator.vibrate(0); } catch { /* ignore */ }
+  releaseWakeLock();
+}
+
+/** Toca som de mensagem nova (não loop). */
+export function playMessageSound() {
+  if (muted) return;
+  const audio = getMessageAudio();
+  playOnce(audio);
+  tryVibrate([80, 50, 80]);
 }
 
 let fcmListenersBound = false;
 let fcmTokenCb = null;
 
-/**
- * Registra callback que recebe o FCM token assim que o Capacitor entregar
- * (depois de checkPermissions/register). O callback é chamado uma única
- * vez por sessão.
- */
 export function onFcmToken(cb) { fcmTokenCb = cb; }
 
 function bindFcmListeners() {
@@ -77,27 +137,25 @@ function bindFcmListeners() {
     console.warn("[fcm] registrationError:", err);
   });
   PN.addListener("pushNotificationReceived", (notif) => {
-    // App em foreground — toca som local pra reforçar
-    notifyNewOrder({
-      id: notif?.data?.orderId,
-      priceCents: notif?.data?.price ? Math.round(parseFloat(notif.data.price) * 100) : undefined,
-      distanceKm: notif?.data?.distanceKm ? parseFloat(notif.data.distanceKm) : undefined,
-    });
+    // App em foreground recebe push — dispara o alerta in-app também
+    const type = notif?.data?.type;
+    if (type === "new_message") {
+      playMessageSound();
+    } else {
+      // Default: tratar como novo pedido
+      notifyNewOrder({
+        id: notif?.data?.orderId,
+        priceCents: notif?.data?.price ? Math.round(parseFloat(notif.data.price) * 100) : undefined,
+        distanceKm: notif?.data?.distanceKm ? parseFloat(notif.data.distanceKm) : undefined,
+      });
+    }
   });
 }
 
-/**
- * Pede permissão de notificação no primeiro uso (quando o motorista
- * vai ficar online). Funciona no Capacitor e no browser.
- *
- * No Capacitor, registra o device pra receber FCM e dispara onFcmToken().
- */
 export async function requestNotificationPermission() {
-  // Browser Notification API
   if ("Notification" in window && Notification.permission === "default") {
     try { await Notification.requestPermission(); } catch { /* ignore */ }
   }
-  // Capacitor PushNotifications (FCM nativo)
   try {
     const Caps = window.Capacitor;
     const PN = Caps?.Plugins?.PushNotifications;
@@ -108,19 +166,17 @@ export async function requestNotificationPermission() {
       perm = await PN.requestPermissions();
     }
     if (perm.receive === "granted") {
-      await PN.register(); // dispara o listener "registration" com o token
+      await PN.register();
     }
   } catch (err) { console.warn("[fcm] requestPermission failed:", err); }
 }
 
 /**
- * Notifica que chegou um pedido novo.
- * @param {{id?: string, distanceKm?: number, priceCents?: number}} order
+ * Notifica chegada de pedido novo. Inicia LOOP de som + vibração.
+ * Chama `stopOrderAlert()` quando motorista aceitar/dispensar.
  */
 export function notifyNewOrder(order) {
-  // Som + vibração — apelo imediato em foreground
-  playSound(1);
-  tryVibrate([300, 150, 300, 150, 600]);
+  startOrderAlert();
 
   // Browser notification (foreground/quase background)
   try {
@@ -129,16 +185,17 @@ export function notifyNewOrder(order) {
         ? ` · R$ ${(order.priceCents / 100).toFixed(2).replace(".", ",")}`
         : "";
       const km = order?.distanceKm ? ` · ${order.distanceKm.toFixed(1)} km` : "";
-      const n = new Notification("Novo pedido NaMão!", {
-        body: `Toca pra abrir${km}${price}`,
+      const n = new Notification("🛵 Novo pedido NaMão!", {
+        body: `Abra o app pra aceitar${km}${price}`,
         icon: "icons/icon-192.png",
         badge: "icons/icon-192.png",
         tag: "namao-new-order",
-        requireInteraction: false,
+        requireInteraction: true,
         silent: false,
       });
       n.onclick = () => {
         window.focus();
+        stopOrderAlert();
         n.close();
       };
     }
@@ -148,8 +205,6 @@ export function notifyNewOrder(order) {
 /**
  * Compara a lista nova de pedidos com a última vista e dispara
  * `notifyNewOrder` para cada pedido 'pending' que apareceu.
- *
- * Chamada do listener subscribeOrders.
  */
 export function processOrderUpdate(orders) {
   if (!Array.isArray(orders)) return;
@@ -167,6 +222,12 @@ export function processOrderUpdate(orders) {
   for (const o of newOnes) {
     notifyNewOrder(o);
   }
+
+  // Se todos os pedidos pendentes sumiram (foram aceitos/cancelados), para o alerta
+  if (alertActive && currentIds.size === 0) {
+    stopOrderAlert();
+  }
+
   lastSeenOrderIds = currentIds;
 }
 
@@ -176,13 +237,16 @@ export function isMuted() { return muted; }
 /**
  * Botão de "tocar som de teste" pro motorista validar o áudio antes
  * do primeiro pedido — desbloqueia autoplay também (gesto do usuário).
+ * Toca uma vez (sem loop) pra ele ouvir.
  */
 export function testNewOrderSound() {
-  playSound(1);
-  tryVibrate([200, 100, 200]);
+  const audio = getOrderAudio();
+  playOnce(audio);
+  tryVibrate([300, 150, 300]);
 }
 
 if (typeof window !== "undefined") {
   window.testNewOrderSound = testNewOrderSound;
   window.requestNotificationPermission = requestNotificationPermission;
+  window.stopOrderAlert = stopOrderAlert;
 }

@@ -84,9 +84,9 @@ async function notifyAvailableDrivers(orderData, orderId) {
     android: {
       priority: "high",
       notification: {
-        channelId: "namao_orders",
-        sound: "default",
-        vibrateTimingsMillis: [0, 300, 200, 300],
+        channelId: "namao_orders_v2",
+        sound: "new_order",
+        vibrateTimingsMillis: [0, 600, 300, 600, 300, 600],
         defaultLightSettings: true,
       },
     },
@@ -138,6 +138,61 @@ exports.onOrderStatusChanged = onDocumentUpdated(
       notification: msg,
       data: { type: "order_update", orderId: String(event.params.orderId), status: after.status },
     });
+  }
+);
+
+/**
+ * Quando o cliente envia mensagem no chat de um pedido, dispara FCM pro
+ * motorista responsável (se houver). Sem isso, o app driver em background
+ * não toca som de mensagem.
+ */
+exports.onChatMessageCreated = onDocumentCreated(
+  `artifacts/${APP_ID}/public/data/orders/{orderId}/messages/{messageId}`,
+  async (event) => {
+    const msg = event.data?.data();
+    if (!msg || msg.from !== "customer") return; // só notifica driver quando cliente fala
+
+    const orderId = event.params.orderId;
+    const orderSnap = await admin
+      .firestore()
+      .doc(`artifacts/${APP_ID}/public/data/orders/${orderId}`)
+      .get();
+    if (!orderSnap.exists) return;
+    const order = orderSnap.data();
+    const driverId = order.driverId;
+    if (!driverId) return;
+
+    const profileSnap = await admin
+      .firestore()
+      .doc(`artifacts/${APP_ID}/users/${driverId}/profile/driverInfo`)
+      .get();
+    const token = profileSnap.exists ? profileSnap.get("fcmToken") : null;
+    if (typeof token !== "string" || token.length < 10) return;
+
+    const preview = String(msg.text || "").slice(0, 80);
+    try {
+      await admin.messaging().send({
+        token,
+        notification: {
+          title: `💬 ${order.customerName || "Cliente"}`,
+          body: preview,
+        },
+        android: {
+          priority: "high",
+          notification: {
+            channelId: "namao_messages_v2",
+            sound: "new_message",
+            vibrateTimingsMillis: [0, 100, 50, 100],
+          },
+        },
+        data: {
+          type: "new_message",
+          orderId: String(orderId),
+        },
+      });
+    } catch (err) {
+      console.warn("[fcm] chat message push failed:", err?.message);
+    }
   }
 );
 

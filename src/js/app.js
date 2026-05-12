@@ -10,6 +10,8 @@ import {
   requestNotificationPermission,
   testNewOrderSound,
   onFcmToken,
+  stopOrderAlert,
+  playMessageSound,
 } from "./notifications.js";
 import {
   subscribeOrders,
@@ -767,20 +769,8 @@ function subscribeChat(orderId) {
       const newFromCustomer = newOnes.filter((m) => m && m.from === "customer").length;
       if (newFromCustomer > 0 && chatLastMsgCount > 0) {
         if (!chatOpen) chatUnread += newFromCustomer;
-        try {
-          const Ctx = window.AudioContext || window.webkitAudioContext;
-          const ctx = new Ctx();
-          const o = ctx.createOscillator();
-          const g = ctx.createGain();
-          o.frequency.value = 760;
-          g.gain.setValueAtTime(0.0001, ctx.currentTime);
-          g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.02);
-          g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
-          o.connect(g).connect(ctx.destination);
-          o.start();
-          o.stop(ctx.currentTime + 0.28);
-          if (navigator.vibrate) navigator.vibrate([60, 30, 60]);
-        } catch { /* ignore */ }
+        // Toca som dedicado de mensagem nova (mais alto + vibração)
+        playMessageSound();
       }
     }
     chatLastMsgCount = msgs.length;
@@ -940,6 +930,7 @@ async function acceptOrderFromUI(orderId) {
     return;
   }
   try {
+    stopOrderAlert(); // Para o som/vibração ao aceitar a corrida
     await acceptOrder(orderId, currentUser.uid, driverProfile.name);
     await startTracking(orderId);
     showToast("Corrida aceita — vá para a coleta");
