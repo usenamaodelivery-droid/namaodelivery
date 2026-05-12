@@ -2,8 +2,27 @@
 import {
   collection, query, orderBy, getDocs, limit,
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { db, APP_ID } from "../firebase.js";
+import { httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
+import { db, APP_ID, functions } from "../firebase.js";
 import { formatBRL, formatDate, badge, PAYOUT_STATUS, escapeHtml, downloadCsv } from "../util.js";
+
+const updatePayoutStatus = httpsCallable(functions, "adminUpdatePayoutStatus");
+
+async function actOnPayout(payoutId, action, btn) {
+  const confirmMsg = action === "complete"
+    ? "Confirmar que você já pagou esse PIX manualmente?"
+    : "Cancelar esse repasse? Os ganhos voltam pro saldo do motorista.";
+  if (!confirm(confirmMsg)) return;
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; }
+  try {
+    await updatePayoutStatus({ payoutId, action });
+    window.location.reload();
+  } catch (e) {
+    alert("Erro: " + (e.message || e));
+    if (btn) { btn.disabled = false; btn.innerHTML = action === "complete" ? "Marcar como pago" : "Cancelar"; }
+  }
+}
+window.__actOnPayout = actOnPayout;
 
 const PAYOUTS_PATH = `artifacts/${APP_ID}/payouts`;
 
@@ -80,6 +99,7 @@ export async function renderPayouts({ content, actionsRoot }) {
               <th class="px-5 py-2 text-left">Chave PIX</th>
               <th class="px-5 py-2 text-right">Valor</th>
               <th class="px-5 py-2 text-right">Quando</th>
+              <th class="px-5 py-2 text-right">Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -94,6 +114,15 @@ export async function renderPayouts({ content, actionsRoot }) {
                 <td class="px-5 py-3 font-mono text-xs">${escapeHtml((p.pixKey || "—"))}</td>
                 <td class="px-5 py-3 text-right font-bold">${formatBRL(p.amount)}</td>
                 <td class="px-5 py-3 text-right text-xs text-slate-500">${formatDate(p.createdAt)}</td>
+                <td class="px-5 py-3 text-right">
+                  ${(p.status === "pending" || p.status === "processing" || p.status === "failed")
+                    ? `
+                    <button onclick="window.__actOnPayout('${p.id}', 'complete', this)" class="px-2 py-1 text-xs font-bold rounded bg-emerald-600 text-white hover:bg-emerald-700 mr-1">Marcar pago</button>
+                    <button onclick="window.__actOnPayout('${p.id}', 'cancel', this)" class="px-2 py-1 text-xs font-bold rounded bg-slate-200 text-slate-700 hover:bg-slate-300">Cancelar</button>
+                  `
+                    : `<span class="text-xs text-slate-400">—</span>`
+                  }
+                </td>
               </tr>
             `).join("")}
           </tbody>

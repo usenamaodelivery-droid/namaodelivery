@@ -480,46 +480,11 @@ exports.requestDriverPayout = onCall({ secrets: [MP_ACCESS_TOKEN_SECRET] }, asyn
     createdAt: Date.now(),
   });
 
-  // Chama MP Money Out (transferência via PIX)
-  // Endpoint: POST /v1/money_requests (varia por versão da API; aqui usamos v1)
-  // NB: precisa que a conta MP tenha PIX out habilitado.
-  const idempotencyKey = `payout-${payoutRef.id}`;
-  let mpResponse;
-  try {
-    const r = await fetch("https://api.mercadopago.com/v1/money_requests", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${getMpToken()}`,
-        "Content-Type": "application/json",
-        "X-Idempotency-Key": idempotencyKey,
-      },
-      body: JSON.stringify({
-        transaction_amount: amount,
-        description: `Repasse Delivery NaMão - ${profile.name || profile.fullName || uid.slice(-6)}`,
-        external_reference: payoutRef.id,
-        beneficiary: {
-          type: "pix",
-          pix_key: profile.pixKey,
-          pix_key_type: profile.pixKeyType,
-        },
-      }),
-    });
-    mpResponse = await r.json();
-    if (!r.ok) {
-      await payoutRef.update({
-        status: "failed",
-        error: mpResponse.message || `HTTP ${r.status}`,
-        failedAt: Date.now(),
-      });
-      throw new HttpsError("internal", `Falha no MP: ${mpResponse.message || r.status}`);
-    }
-  } catch (e) {
-    if (e instanceof HttpsError) throw e;
-    await payoutRef.update({ status: "failed", error: String(e), failedAt: Date.now() });
-    throw new HttpsError("internal", "Erro ao chamar Mercado Pago");
-  }
-
-  // Marca entregas como pending (webhook confirma depois)
+  // Marca entregas como pending (vai ser confirmado quando admin processar manualmente)
+  // OBS: a API de PIX-out automático do MP exige enrollment especial. Enquanto
+  // não temos isso liberado, o repasse é processado pelo admin via dashboard:
+  // ele paga manualmente via app do banco/MP, depois clica "Marcar como pago"
+  // no painel admin pra finalizar o registro.
   const batch = admin.firestore().batch();
   for (const e of eligible) {
     batch.update(
@@ -531,8 +496,7 @@ exports.requestDriverPayout = onCall({ secrets: [MP_ACCESS_TOKEN_SECRET] }, asyn
 
   await payoutRef.update({
     status: "pending",
-    mpId: String(mpResponse.id || ""),
-    mpStatus: mpResponse.status || "",
+    requestedAt: Date.now(),
   });
 
   return {
@@ -540,8 +504,63 @@ exports.requestDriverPayout = onCall({ secrets: [MP_ACCESS_TOKEN_SECRET] }, asyn
     payoutId: payoutRef.id,
     amount,
     deliveryCount: eligible.length,
-    mpStatus: mpResponse.status || "pending",
+    message: "Solicitação enviada. O repasse via PIX cai na sua chave em até 24h.",
   };
+});
+
+/**
+ * Admin marca payout como pago (depois de pagar manualmente via MP/banco)
+ * ou como cancelado (devolve ganhos para o saldo do motorista).
+ */
+exports.adminUpdatePayoutStatus = onCall(async (request) => {
+  const auth = request.auth;
+  if (!auth) throw new HttpsError("unauthenticated", "Login obrigatório");
+  if (auth.token.admin !== true) {
+    throw new HttpsError("permission-denied", "Apenas admin");
+  }
+
+  const { payoutId, action, note } = request.data || {};
+  if (!payoutId || !["complete", "cancel"].includes(action)) {
+    throw new HttpsError("invalid-argument", "payoutId e action (complete|cancel) obrigatórios");
+  }
+
+  const payoutRef = admin.firestore().doc(`artifacts/${APP_ID}/payouts/${payoutId}`);
+  const snap = await payoutRef.get();
+  if (!snap.exists) throw new HttpsError("not-found", "Payout não encontrado");
+  const payout = snap.data();
+  const deliveryIds = Array.isArray(payout.deliveryIds) ? payout.deliveryIds : [];
+
+  const batch = admin.firestore().batch();
+  if (action === "complete") {
+    batch.update(payoutRef, {
+      status: "completed",
+      completedAt: Date.now(),
+      completedBy: auth.uid,
+      adminNote: note || null,
+    });
+    for (const id of deliveryIds) {
+      batch.update(
+        admin.firestore().doc(`artifacts/${APP_ID}/public/data/orders/${id}`),
+        { payoutStatus: "completed", payoutCompletedAt: Date.now() }
+      );
+    }
+  } else {
+    // cancel: devolve as entregas pro saldo disponível (limpa payoutStatus)
+    batch.update(payoutRef, {
+      status: "cancelled",
+      cancelledAt: Date.now(),
+      cancelledBy: auth.uid,
+      adminNote: note || null,
+    });
+    for (const id of deliveryIds) {
+      batch.update(
+        admin.firestore().doc(`artifacts/${APP_ID}/public/data/orders/${id}`),
+        { payoutStatus: admin.firestore.FieldValue.delete(), payoutId: admin.firestore.FieldValue.delete() }
+      );
+    }
+  }
+  await batch.commit();
+  return { ok: true };
 });
 
 /**
