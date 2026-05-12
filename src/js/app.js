@@ -42,7 +42,7 @@ import {
   setDriverStatus,
   subscribeSecurityLogs
 } from "./admin.js";
-import { startTracking } from "./geolocation.js";
+import { startTracking, stopTracking } from "./geolocation.js";
 import {
   initDriverMap,
   centerDriverMap,
@@ -736,10 +736,18 @@ function syncActiveDeliveryOnMap() {
       showActiveDelivery(myActive);
       subscribeChat(myActive.id);
     }
+    // Garante que o tracker de GPS está rodando — se o app foi reiniciado
+    // no meio da entrega (Android matou o processo), o tracking precisa
+    // re-iniciar sozinho ao detectar a corrida ativa. startTracking é
+    // idempotente, então chamar repetido não causa problema.
+    startTracking(myActive.id).catch((err) => console.warn("[geo] startTracking failed", err));
   } else if (lastActiveOrderId) {
     lastActiveOrderId = null;
     clearActiveDelivery();
     unsubscribeChat();
+    // Para o GPS quando a corrida finaliza (completed/cancelled). Sem isso,
+    // o plugin nativo seguiria rodando em background gastando bateria.
+    stopTracking().catch(() => { /* ignore */ });
     // Fecha modal de chat ao sair de corrida ativa
     const modal = document.getElementById("chat-modal");
     if (modal && !modal.classList.contains("hidden")) modal.classList.add("hidden");
