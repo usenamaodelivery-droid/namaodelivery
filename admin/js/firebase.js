@@ -10,7 +10,7 @@ export const firebaseConfig = {
   apiKey: "AIzaSyDAilsro9E7x88PixtdL5RWLn6zFINIajo",
   authDomain: "namao-delivery-prod.firebaseapp.com",
   projectId: "namao-delivery-prod",
-  storageBucket: "namao-delivery-prod.firebasestorage.app",
+  storageBucket: "namao-delivery-prod-payouts",
   messagingSenderId: "129438267740",
   appId: "1:129438267740:web:2a50c599a912b09a696999",
   measurementId: "G-S4NYP7QZ1T",
