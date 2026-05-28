@@ -163,6 +163,43 @@ function renderDeliveryItem(d) {
   `;
 }
 
+function renderPayoutItem(p) {
+  const date = p.createdAt ? new Date(p.createdAt).toLocaleDateString("pt-BR", {
+    day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"
+  }) : "—";
+  const statusMap = {
+    processing: { label: "Processando", cls: "text-blue-600" },
+    pending:    { label: "Aguardando pagamento", cls: "text-amber-600" },
+    completed:  { label: "Pago", cls: "text-success" },
+    failed:     { label: "Falhou", cls: "text-danger" },
+    cancelled:  { label: "Cancelado", cls: "text-gray-500" },
+  };
+  const st = statusMap[p.status] || statusMap.processing;
+  const completedLabel = p.completedAt
+    ? `<p class="text-tiny text-gray-400">Pago em ${new Date(p.completedAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</p>`
+    : "";
+  const receiptBtn = p.receiptUrl
+    ? `<a href="${p.receiptUrl}" target="_blank" rel="noopener" class="inline-block mt-1 px-2.5 py-1 text-tiny font-black uppercase tracking-wider rounded-md bg-success/10 text-success">
+         <i class="fa-solid fa-receipt"></i> Ver comprovante
+       </a>`
+    : "";
+  return `
+    <div class="border-b border-gray-100 py-2.5 last:border-0">
+      <div class="flex justify-between items-start gap-3">
+        <div class="flex-1 min-w-0">
+          <p class="text-xs font-bold text-gray-400">#${p.shortId} · ${date}</p>
+          <p class="text-sm font-extrabold ${st.cls} uppercase">${st.label}</p>
+          ${completedLabel}
+          ${receiptBtn}
+        </div>
+        <div class="text-right">
+          <p class="text-sm font-black text-primary">R$ ${formatBRL(p.amount)}</p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 /**
  * Abre o modal de carteira. Carrega saldo + chave PIX em paralelo.
  */
@@ -181,7 +218,7 @@ export async function openWallet(uid) {
 
   try {
     const [balance, pixInfo] = await Promise.all([
-      fetchDriverBalance().catch(() => ({ available: 0, pending: 0, totalEarned: 0, deliveries: [] })),
+      fetchDriverBalance().catch(() => ({ available: 0, pending: 0, totalEarned: 0, deliveries: [], payouts: [] })),
       getDriverPixKey(uid).catch(() => null),
     ]);
 
@@ -220,6 +257,15 @@ export async function openWallet(uid) {
           </h3>
           ${renderPixKeyForm(pixInfo?.pixKey || "", pixInfo?.pixKeyType || "cpf")}
         </div>
+
+        ${(Array.isArray(balance.payouts) && balance.payouts.length > 0) ? `
+          <div class="bg-white border-2 border-gray-100 rounded-2xl p-4 shadow-sm">
+            <h3 class="text-sm font-extrabold text-primary mb-2 uppercase tracking-wider">
+              <i class="fa-solid fa-money-bill-transfer text-accent"></i> Histórico de saques
+            </h3>
+            ${balance.payouts.slice(0, 50).map(renderPayoutItem).join("")}
+          </div>
+        ` : ""}
 
         <div class="bg-white border-2 border-gray-100 rounded-2xl p-4 shadow-sm">
           <h3 class="text-sm font-extrabold text-primary mb-2 uppercase tracking-wider">

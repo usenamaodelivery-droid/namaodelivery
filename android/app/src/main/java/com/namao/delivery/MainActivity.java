@@ -14,6 +14,7 @@ public class MainActivity extends BridgeActivity {
 
     private static final String ORDER_CHANNEL_ID = "namao_orders_v2";
     private static final String MESSAGE_CHANNEL_ID = "namao_messages_v2";
+    private static final String PAYOUT_CHANNEL_ID = "namao_payouts";
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -69,6 +70,24 @@ public class MainActivity extends BridgeActivity {
             msgChan.setVibrationPattern(new long[]{0, 100, 50, 100});
             msgChan.setShowBadge(true);
             nm.createNotificationChannel(msgChan);
+        }
+
+        // Canal para atualizações de saque/repasse PIX (pagamento confirmado pelo admin)
+        if (nm.getNotificationChannel(PAYOUT_CHANNEL_ID) == null) {
+            NotificationChannel payChan = new NotificationChannel(
+                    PAYOUT_CHANNEL_ID,
+                    "Saques PIX",
+                    NotificationManager.IMPORTANCE_HIGH
+            );
+            payChan.setDescription("Avisa quando seu saque foi enviado ou cancelado");
+            Uri paySoundUri = Uri.parse(
+                    ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + getPackageName() + "/raw/new_message"
+            );
+            payChan.setSound(paySoundUri, attrs);
+            payChan.enableVibration(true);
+            payChan.setVibrationPattern(new long[]{0, 200, 100, 200});
+            payChan.setShowBadge(true);
+            nm.createNotificationChannel(payChan);
         }
     }
 }

@@ -519,7 +519,7 @@ exports.adminUpdatePayoutStatus = onCall(async (request) => {
     throw new HttpsError("permission-denied", "Apenas admin");
   }
 
-  const { payoutId, action, note } = request.data || {};
+  const { payoutId, action, note, receiptUrl } = request.data || {};
   if (!payoutId || !["complete", "cancel"].includes(action)) {
     throw new HttpsError("invalid-argument", "payoutId e action (complete|cancel) obrigatórios");
   }
@@ -532,16 +532,21 @@ exports.adminUpdatePayoutStatus = onCall(async (request) => {
 
   const batch = admin.firestore().batch();
   if (action === "complete") {
-    batch.update(payoutRef, {
+    const completedAt = Date.now();
+    const update = {
       status: "completed",
-      completedAt: Date.now(),
+      completedAt,
       completedBy: auth.uid,
       adminNote: note || null,
-    });
+    };
+    if (typeof receiptUrl === "string" && receiptUrl.length > 0) {
+      update.receiptUrl = receiptUrl;
+    }
+    batch.update(payoutRef, update);
     for (const id of deliveryIds) {
       batch.update(
         admin.firestore().doc(`artifacts/${APP_ID}/public/data/orders/${id}`),
-        { payoutStatus: "completed", payoutCompletedAt: Date.now() }
+        { payoutStatus: "completed", payoutCompletedAt: completedAt }
       );
     }
   } else {
@@ -560,6 +565,45 @@ exports.adminUpdatePayoutStatus = onCall(async (request) => {
     }
   }
   await batch.commit();
+
+  // Push notification ao motorista quando o saque é finalizado (completed/cancelled).
+  try {
+    const driverId = payout.driverId;
+    if (driverId) {
+      const profSnap = await admin
+        .firestore()
+        .doc(`artifacts/${APP_ID}/users/${driverId}/profile/driverInfo`)
+        .get();
+      const token = profSnap.exists ? profSnap.get("fcmToken") : null;
+      if (typeof token === "string" && token.length > 10) {
+        const amount = typeof payout.amount === "number" ? payout.amount.toFixed(2) : "?";
+        const title = action === "complete" ? "Saque PIX enviado" : "Saque cancelado";
+        const body = action === "complete"
+          ? `R$ ${amount} foi transferido pra sua chave PIX.`
+          : `Seu saque de R$ ${amount} foi cancelado. Os ganhos voltaram pro saldo.`;
+        await admin.messaging().send({
+          token,
+          notification: { title, body },
+          android: {
+            priority: "high",
+            notification: {
+              channelId: "namao_payouts",
+              sound: "new_message",
+              defaultVibrateTimings: true,
+            },
+          },
+          data: {
+            type: "payout_update",
+            payoutId: String(payoutId),
+            action: String(action),
+          },
+        });
+      }
+    }
+  } catch (e) {
+    console.warn("[adminUpdatePayoutStatus] push notify failed", e);
+  }
+
   return { ok: true };
 });
 
@@ -605,10 +649,36 @@ exports.getDriverBalance = onCall(async (request) => {
     availableCents += cents;
   });
 
+  // Histórico de saques (payouts) do motorista — com link de comprovante se já pago.
+  const payoutsSnap = await admin
+    .firestore()
+    .collection(`artifacts/${APP_ID}/payouts`)
+    .where("driverId", "==", uid)
+    .get();
+  const payouts = [];
+  payoutsSnap.forEach((p) => {
+    const v = p.data();
+    payouts.push({
+      id: p.id,
+      shortId: p.id.slice(-6).toUpperCase(),
+      amount: Number(v.amount || 0),
+      status: v.status || "processing",
+      pixKey: v.pixKey || "",
+      pixKeyType: v.pixKeyType || "",
+      createdAt: v.createdAt || 0,
+      completedAt: v.completedAt || null,
+      cancelledAt: v.cancelledAt || null,
+      receiptUrl: v.receiptUrl || null,
+      adminNote: v.adminNote || null,
+    });
+  });
+  payouts.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
   return {
     available: availableCents / 100,
     pending: pendingCents / 100,
     totalEarned: totalEarnedCents / 100,
     deliveries: deliveries.sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0)),
+    payouts,
   };
 });

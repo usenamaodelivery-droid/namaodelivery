@@ -27,5 +27,19 @@ service firebase.storage {
       allow write: if request.auth != null && request.auth.uid == userId
         && request.resource.size < 5 * 1024 * 1024;
     }
+
+    // Comprovantes de repasse PIX (saque do motorista).
+    // Upload: apenas admin (após pagar manualmente o PIX no app do banco).
+    // Read: admin OU motorista dono do payout.
+    match /artifacts/namao-delivery-prod/payouts/{payoutId}/{fileName} {
+      allow read: if request.auth != null && (
+        request.auth.token.admin == true ||
+        firestore.get(/databases/(default)/documents/artifacts/namao-delivery-prod/payouts/$(payoutId)).data.driverId == request.auth.uid
+      );
+      allow write: if request.auth != null
+        && request.auth.token.admin == true
+        && request.resource.size < 5 * 1024 * 1024
+        && (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf');
+    }
   }
 }
