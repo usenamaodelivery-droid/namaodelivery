@@ -10,6 +10,7 @@
  */
 const { onCall, HttpsError, onRequest } = require("firebase-functions/v2/https");
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
@@ -250,7 +251,15 @@ exports.mercadopagoWebhook = onRequest(
         paymentUpdatedAt: Date.now(),
       };
       if (payment.status === "approved" && before.status === "waiting_confirmation") {
-        update.status = "pending"; // libera pros motoristas
+        // Pedido de loja (catálogo) precisa de aceite do merchant ANTES de
+        // qualquer motorista ser convocado. Sem storeId é entrega ponto-a-
+        // ponto e segue o fluxo legado (PIX → pending → driver dispatch).
+        if (before.storeId) {
+          update.status = "awaiting_merchant_acceptance";
+          update.merchantAcceptDeadline = Date.now() + 10 * 60 * 1000;
+        } else {
+          update.status = "pending"; // libera pros motoristas
+        }
         update.paymentApprovedAt = Date.now();
       }
       if (payment.status === "refunded") {
@@ -682,3 +691,57 @@ exports.getDriverBalance = onCall(async (request) => {
     payouts,
   };
 });
+
+/* ===========================================================================
+ * MERCHANT — timeout de aceite (10 min) + dispatch ao motorista após aceite
+ * =========================================================================== */
+
+/**
+ * Roda a cada minuto e cancela pedidos de loja que passaram do prazo de
+ * aceite (merchantAcceptDeadline). Estorno do PIX é manual via admin por
+ * enquanto (TODO: integrar com refund automático do MP).
+ */
+exports.merchantAcceptanceTimeout = onSchedule(
+  { schedule: "every 1 minutes", timeZone: "America/Sao_Paulo", region: "us-central1" },
+  async () => {
+    const now = Date.now();
+    const snap = await admin
+      .firestore()
+      .collection(`artifacts/${APP_ID}/public/data/orders`)
+      .where("status", "==", "awaiting_merchant_acceptance")
+      .where("merchantAcceptDeadline", "<", now)
+      .limit(50)
+      .get();
+
+    if (snap.empty) return;
+
+    const batch = admin.firestore().batch();
+    snap.forEach((doc) => {
+      batch.update(doc.ref, {
+        status: "cancelled",
+        cancelReason: "merchant_timeout",
+        merchantTimedOutAt: now,
+        refundPending: true,
+      });
+    });
+    await batch.commit();
+    console.log(`[merchantTimeout] cancelados ${snap.size} pedidos`);
+  }
+);
+
+/**
+ * Quando o merchant aceita (API route flipa status → pending), dispara o
+ * mesmo fluxo dos pedidos ponto-a-ponto. O onOrderCreated/onOrderStatusChange
+ * já cuida do resto. Aqui apenas garantimos que a transição é registrada.
+ */
+exports.onMerchantAccepted = onDocumentUpdated(
+  `artifacts/${APP_ID}/public/data/orders/{orderId}`,
+  async (event) => {
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+    if (!before || !after) return;
+    if (before.status === "awaiting_merchant_acceptance" && after.status === "pending") {
+      console.log(`[merchant] pedido ${event.params.orderId} aceito → dispatch`);
+    }
+  }
+);
