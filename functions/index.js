@@ -697,12 +697,113 @@ exports.getDriverBalance = onCall(async (request) => {
  * =========================================================================== */
 
 /**
+ * Executa o estorno PIX no Mercado Pago e atualiza o pedido para `refunded`.
+ * Idempotente: se já existe refundId no doc, retorna sem chamar MP.
+ */
+async function executeMpRefund(orderRef, orderData, reason) {
+  // Idempotência — já estornado?
+  if (orderData.refundId || orderData.status === "refunded") {
+    await orderRef.update({ refundPending: false });
+    return { skipped: true };
+  }
+  // Sem paymentId — pedido nunca foi pago, só limpa a flag.
+  if (!orderData.paymentId) {
+    await orderRef.update({
+      refundPending: false,
+      refundedAt: Date.now(),
+      refundSkipped: "no_payment_id",
+    });
+    return { skipped: true };
+  }
+
+  const token = getMpToken();
+  if (!token) {
+    console.error("[refund] MP token ausente — não vou chamar API");
+    return { error: "no_mp_token" };
+  }
+
+  const idempotencyKey = `refund-${orderRef.id}-${reason}`;
+  const r = await fetch(
+    `https://api.mercadopago.com/v1/payments/${orderData.paymentId}/refunds`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "X-Idempotency-Key": idempotencyKey,
+      },
+    }
+  );
+  const result = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    console.error(
+      `[refund] MP rejeitou refund do pedido ${orderRef.id}:`,
+      r.status,
+      result
+    );
+    await orderRef.update({
+      refundError: `MP ${r.status}: ${result.message || "erro"}`,
+      refundAttemptedAt: Date.now(),
+    });
+    return { error: result.message || `mp_${r.status}` };
+  }
+
+  await orderRef.update({
+    status: "refunded",
+    refundedAt: Date.now(),
+    refundId: String(result.id || ""),
+    refundReason: reason,
+    refundPending: false,
+    refundError: admin.firestore.FieldValue.delete(),
+  });
+  console.log(
+    `[refund] pedido ${orderRef.id} estornado (motivo=${reason}, refundId=${result.id})`
+  );
+  return { ok: true, refundId: String(result.id || "") };
+}
+
+/**
+ * Trigger: quando qualquer pedido recebe `refundPending: true`, executa o
+ * estorno automático no Mercado Pago. Cobre tanto recusa do lojista quanto
+ * timeout de 10 minutos sem aceite.
+ */
+exports.onOrderRefundPending = onDocumentUpdated(
+  {
+    document: `artifacts/${APP_ID}/public/data/orders/{orderId}`,
+    secrets: [MP_ACCESS_TOKEN_SECRET],
+  },
+  async (event) => {
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+    if (!before || !after) return;
+    const becamePending = !before.refundPending && after.refundPending === true;
+    if (!becamePending) return;
+    if (after.refundId) return; // já processado
+    const reason = after.cancelReason || "unknown";
+    try {
+      await executeMpRefund(event.data.after.ref, after, reason);
+    } catch (err) {
+      console.error(`[refund] erro inesperado em ${event.params.orderId}:`, err);
+      await event.data.after.ref.update({
+        refundError: err && err.message ? err.message : "unknown",
+        refundAttemptedAt: Date.now(),
+      });
+    }
+  }
+);
+
+/**
  * Roda a cada minuto e cancela pedidos de loja que passaram do prazo de
- * aceite (merchantAcceptDeadline). Estorno do PIX é manual via admin por
- * enquanto (TODO: integrar com refund automático do MP).
+ * aceite (merchantAcceptDeadline). Marca `refundPending: true` — o trigger
+ * `onOrderRefundPending` cuida do estorno MP automaticamente.
  */
 exports.merchantAcceptanceTimeout = onSchedule(
-  { schedule: "every 1 minutes", timeZone: "America/Sao_Paulo", region: "us-central1" },
+  {
+    schedule: "every 1 minutes",
+    timeZone: "America/Sao_Paulo",
+    region: "us-central1",
+    secrets: [MP_ACCESS_TOKEN_SECRET],
+  },
   async () => {
     const now = Date.now();
     const snap = await admin
