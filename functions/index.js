@@ -27,6 +27,12 @@ const DRIVER_SHARE = 1 - PLATFORM_FEE;
 const MP_ACCESS_TOKEN_SECRET = defineSecret("MERCADOPAGO_ACCESS_TOKEN");
 const MP_WEBHOOK_SECRET = defineSecret("MERCADOPAGO_WEBHOOK_SECRET");
 
+// VAPID — Web Push pro mini-admin do lojista (PWA). A pública também roda
+// no front, mas a privada só aqui.
+const VAPID_PUBLIC_KEY_SECRET = defineSecret("VAPID_PUBLIC_KEY");
+const VAPID_PRIVATE_KEY_SECRET = defineSecret("VAPID_PRIVATE_KEY");
+const VAPID_SUBJECT_SECRET = defineSecret("VAPID_SUBJECT");
+
 function getMpToken() {
   return MP_ACCESS_TOKEN_SECRET.value() || process.env.MERCADOPAGO_ACCESS_TOKEN || "";
 }
@@ -827,6 +833,121 @@ exports.merchantAcceptanceTimeout = onSchedule(
     });
     await batch.commit();
     console.log(`[merchantTimeout] cancelados ${snap.size} pedidos`);
+  }
+);
+
+/**
+ * Web Push pro lojista quando pedido entra em `awaiting_merchant_acceptance`.
+ *
+ * Lê `pushSubscriptions` do merchant doc e envia VAPID push pra cada
+ * subscription. Endpoints inválidos (410/404) são removidos automaticamente.
+ *
+ * Combinado com o WhatsApp fallback + som contínuo no mini-admin, garante
+ * que o lojista não perca o pedido nos 10 min de aceite.
+ */
+async function notifyMerchantNewOrder(orderData, orderId) {
+  const storeId = orderData.storeId;
+  if (!storeId) return;
+
+  const pub = VAPID_PUBLIC_KEY_SECRET.value() || process.env.VAPID_PUBLIC_KEY || "";
+  const priv = VAPID_PRIVATE_KEY_SECRET.value() || process.env.VAPID_PRIVATE_KEY || "";
+  const subj = VAPID_SUBJECT_SECRET.value() || process.env.VAPID_SUBJECT || "mailto:dev@usenamao.com";
+  if (!pub || !priv) {
+    console.warn("[merchantPush] VAPID secrets ausentes — pulando push");
+    return;
+  }
+
+  const merchantRef = admin
+    .firestore()
+    .doc(`artifacts/${APP_ID}/public/data/merchants/${storeId}`);
+  const merchantSnap = await merchantRef.get();
+  if (!merchantSnap.exists) return;
+  const subs = merchantSnap.get("pushSubscriptions");
+  if (!Array.isArray(subs) || subs.length === 0) return;
+
+  const webpush = require("web-push");
+  webpush.setVapidDetails(subj, pub, priv);
+
+  const itemsTotal = typeof orderData.itemsTotalCents === "number"
+    ? (orderData.itemsTotalCents / 100).toFixed(2)
+    : "?";
+  const itemCount = Array.isArray(orderData.items)
+    ? orderData.items.reduce((s, i) => s + (Number(i.qty) || 0), 0)
+    : 0;
+
+  const payload = JSON.stringify({
+    title: "🛎️ Novo pedido — aceite em 10 min!",
+    body: `${itemCount} ${itemCount === 1 ? "item" : "itens"} · R$ ${itemsTotal} · ${
+      orderData.customerName || "Cliente"
+    }`,
+    tag: `order-${orderId}`,
+    data: {
+      orderId: String(orderId),
+      url: "/loja-admin",
+    },
+  });
+
+  const surviving = [];
+  for (const sub of subs) {
+    if (!sub || !sub.endpoint) continue;
+    try {
+      await webpush.sendNotification(sub, payload, { TTL: 600 });
+      surviving.push(sub);
+    } catch (err) {
+      const status = err && (err.statusCode || err.status);
+      if (status === 404 || status === 410) {
+        console.log(`[merchantPush] subscription expirou (${status}), removendo`);
+        // Não inclui em surviving — vai sumir do array
+      } else {
+        console.error(`[merchantPush] erro ao enviar:`, err && err.body ? err.body : err);
+        surviving.push(sub); // mantém — pode ser falha temporária
+      }
+    }
+  }
+  if (surviving.length !== subs.length) {
+    await merchantRef.update({ pushSubscriptions: surviving });
+  }
+}
+
+exports.onMerchantOrderArrived = onDocumentUpdated(
+  {
+    document: `artifacts/${APP_ID}/public/data/orders/{orderId}`,
+    secrets: [VAPID_PUBLIC_KEY_SECRET, VAPID_PRIVATE_KEY_SECRET, VAPID_SUBJECT_SECRET],
+  },
+  async (event) => {
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+    if (!before || !after) return;
+    // Dispara só na transição pra awaiting_merchant_acceptance.
+    if (
+      before.status !== "awaiting_merchant_acceptance" &&
+      after.status === "awaiting_merchant_acceptance"
+    ) {
+      try {
+        await notifyMerchantNewOrder(after, event.params.orderId);
+      } catch (err) {
+        console.error("[merchantPush] erro:", err);
+      }
+    }
+  }
+);
+
+// Também cobre o caso de o pedido já entrar em awaiting_merchant_acceptance
+// (ex.: documento criado direto nesse status, sem passar por update).
+exports.onMerchantOrderCreated = onDocumentCreated(
+  {
+    document: `artifacts/${APP_ID}/public/data/orders/{orderId}`,
+    secrets: [VAPID_PUBLIC_KEY_SECRET, VAPID_PRIVATE_KEY_SECRET, VAPID_SUBJECT_SECRET],
+  },
+  async (event) => {
+    const data = event.data?.data();
+    if (!data) return;
+    if (data.status !== "awaiting_merchant_acceptance") return;
+    try {
+      await notifyMerchantNewOrder(data, event.params.orderId);
+    } catch (err) {
+      console.error("[merchantPush] erro:", err);
+    }
   }
 );
 
