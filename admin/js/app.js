@@ -4,6 +4,7 @@ import { showToast } from "./util.js";
 
 import { renderDashboard }  from "./sections/dashboard.js";
 import { renderDrivers }    from "./sections/drivers.js";
+import { renderDriverLeads } from "./sections/driver-leads.js";
 import { renderOrders }     from "./sections/orders.js";
 import { renderMerchants }  from "./sections/merchants.js";
 import { renderCustomers }  from "./sections/customers.js";
@@ -17,6 +18,7 @@ import { renderConfig }     from "./sections/config.js";
 const ROUTES = {
   dashboard: { render: renderDashboard, title: "Resumo",       subtitle: "Visão geral da operação" },
   drivers:   { render: renderDrivers,   title: "Motoristas",   subtitle: "Aprovar, bloquear, ver KYC" },
+  "driver-leads": { render: renderDriverLeads, title: "Pré-cadastros", subtitle: "Leads vindos do portal /motorista — contato via WhatsApp" },
   orders:    { render: renderOrders,    title: "Pedidos",      subtitle: "Todos os pedidos da plataforma" },
   merchants: { render: renderMerchants, title: "Lojas",        subtitle: "Cardápios Pedir NaMão: ativar, comissão, mini-admin" },
   customers: { render: renderCustomers, title: "Clientes",     subtitle: "Histórico, ticket médio, recência" },
