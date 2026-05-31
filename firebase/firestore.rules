@@ -143,6 +143,15 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // Pré-cadastros de motorista vindos do portal /motorista.
+    // Cliente PWA escreve via Admin SDK (rota /api/motorista/lead).
+    // Admin lê/atualiza/deleta pelo dashboard.
+    match /artifacts/namao-delivery-prod/public/data/driverLeads/{leadId} {
+      allow read:   if isAdmin();
+      allow create: if false; // só Admin SDK
+      allow update, delete: if isAdmin();
+    }
+
     // Configurações gerais — admin escreve, qualquer logado lê.
     match /artifacts/namao-delivery-prod/config/{docId} {
       allow read:   if isSignedIn();
