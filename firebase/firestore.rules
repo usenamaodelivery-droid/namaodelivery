@@ -148,5 +148,21 @@ service cloud.firestore {
       allow read:   if isSignedIn();
       allow write:  if isAdmin();
     }
+
+    // Lojas (merchants) Pedir NaMão — leitura pública (o catálogo do PWA
+    // já é público via Admin SDK na API; abrir leitura aqui só simplifica o
+    // dashboard sem expor nada novo). Apenas admin escreve direto pelo
+    // browser. accessTokenHash NUNCA é exposto em queries client porque
+    // os listeners do dashboard só rodam logados como admin.
+    match /artifacts/namao-delivery-prod/public/data/merchants/{merchantId} {
+      allow read:  if true;
+      allow write: if isAdmin();
+
+      // Catálogo de produtos da loja.
+      match /products/{productId} {
+        allow read:  if true;
+        allow write: if isAdmin();
+      }
+    }
   }
 }
