@@ -967,3 +967,118 @@ exports.onMerchantAccepted = onDocumentUpdated(
     }
   }
 );
+
+/**
+ * Quando o admin publica um comunicado (broadcast), dispara FCM pra audience
+ * (drivers/customers/all). Sem isso o doc fica no Firestore mas o app driver
+ * não tem nada ouvindo — o motorista nunca vê.
+ *
+ * Audience:
+ *  - "drivers" → todos os motoristas com status=approved (channel padrão)
+ *  - "customers" → todos os clientes que tiverem customerFcmToken em algum pedido
+ *  - "all" → drivers + customers
+ *
+ * Idempotente: marca o doc com broadcastedAt na primeira vez e nunca refaz.
+ */
+async function notifyDriversBroadcast(broadcast, broadcastId) {
+  const profilesSnap = await admin
+    .firestore()
+    .collectionGroup("profile")
+    .where("status", "==", "approved")
+    .get();
+  const tokens = [];
+  profilesSnap.forEach((doc) => {
+    if (doc.id !== "driverInfo") return;
+    const t = doc.get("fcmToken");
+    if (typeof t === "string" && t.length > 10) tokens.push(t);
+  });
+  if (!tokens.length) return { sent: 0, failed: 0 };
+
+  const title = String(broadcast.title || "Comunicado NaMão").slice(0, 80);
+  const body = String(broadcast.message || "").slice(0, 220);
+
+  const res = await admin.messaging().sendEachForMulticast({
+    tokens,
+    notification: { title, body },
+    android: {
+      priority: "high",
+      notification: {
+        channelId: "namao_orders_v2",
+        defaultSound: true,
+        defaultVibrateTimings: true,
+      },
+    },
+    data: {
+      type: "broadcast",
+      broadcastId: String(broadcastId),
+      title,
+      body,
+    },
+  });
+  return { sent: res.successCount, failed: res.failureCount };
+}
+
+async function notifyCustomersBroadcast(broadcast, broadcastId) {
+  // Não temos uma coleção de clientes — pegamos os customerFcmToken dos
+  // últimos 1000 pedidos. Dedup por token antes de enviar.
+  const snap = await admin
+    .firestore()
+    .collection(`artifacts/${APP_ID}/public/data/orders`)
+    .orderBy("createdAt", "desc")
+    .limit(1000)
+    .get();
+  const tokens = new Set();
+  snap.forEach((d) => {
+    const t = d.get("customerFcmToken");
+    if (typeof t === "string" && t.length > 10) tokens.add(t);
+  });
+  if (!tokens.size) return { sent: 0, failed: 0 };
+
+  const title = String(broadcast.title || "Comunicado NaMão").slice(0, 80);
+  const body = String(broadcast.message || "").slice(0, 220);
+
+  const res = await admin.messaging().sendEachForMulticast({
+    tokens: Array.from(tokens),
+    notification: { title, body },
+    data: {
+      type: "broadcast",
+      broadcastId: String(broadcastId),
+      title,
+      body,
+    },
+  });
+  return { sent: res.successCount, failed: res.failureCount };
+}
+
+exports.onBroadcastCreated = onDocumentCreated(
+  `artifacts/${APP_ID}/public/data/broadcasts/{broadcastId}`,
+  async (event) => {
+    const data = event.data?.data();
+    if (!data) return;
+    if (data.broadcastedAt) return; // idempotência
+    const audience = data.audience || "drivers";
+    const broadcastId = event.params.broadcastId;
+
+    const result = { drivers: null, customers: null };
+    try {
+      if (audience === "drivers" || audience === "all") {
+        result.drivers = await notifyDriversBroadcast(data, broadcastId);
+      }
+      if (audience === "customers" || audience === "all") {
+        result.customers = await notifyCustomersBroadcast(data, broadcastId);
+      }
+    } catch (err) {
+      console.error("[broadcast] erro ao enviar:", err);
+    }
+
+    try {
+      await event.data.ref.update({
+        broadcastedAt: Date.now(),
+        broadcastResult: result,
+      });
+    } catch (err) {
+      console.warn("[broadcast] erro ao marcar broadcastedAt:", err);
+    }
+    console.log(`[broadcast] ${broadcastId} audience=${audience}`, result);
+  }
+);

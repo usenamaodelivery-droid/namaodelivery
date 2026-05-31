@@ -10,9 +10,11 @@ import {
   requestNotificationPermission,
   testNewOrderSound,
   onFcmToken,
+  onBroadcastPush,
   stopOrderAlert,
   playMessageSound,
 } from "./notifications.js";
+import { subscribeBroadcasts, showBroadcastModal } from "./broadcasts.js";
 import {
   subscribeOrders,
   acceptOrder,
@@ -67,6 +69,7 @@ let unsubOrders = null;
 let unsubDriver = null;
 let unsubSecurity = null;
 let unsubMessages = null;
+let unsubBroadcasts = null;
 let lastActiveOrderId = null;
 let chatMessages = [];
 let chatLastMsgCount = 0;
@@ -95,6 +98,7 @@ onAuth(async (user) => {
     if (unsubOrders) { unsubOrders(); unsubOrders = null; }
     if (unsubDriver) { unsubDriver(); unsubDriver = null; }
     if (unsubSecurity) { unsubSecurity(); unsubSecurity = null; }
+    if (unsubBroadcasts) { unsubBroadcasts(); unsubBroadcasts = null; }
     currentUser = null;
     driverProfile = null;
     return;
@@ -116,7 +120,16 @@ onAuth(async (user) => {
       console.warn("[fcm] save token failed:", err),
     );
   });
+  // Push de comunicado em foreground (sem sirene de pedido)
+  onBroadcastPush((b) => { showBroadcastModal(b); });
   requestNotificationPermission();
+
+  // Listener Firestore de comunicados — cobre o caso de o motorista não
+  // ter dado permissão de push ou estar com push falhando. Idempotente:
+  // marca cada broadcast como visto via localStorage.
+  if (!unsubBroadcasts) {
+    unsubBroadcasts = subscribeBroadcasts((b) => { showBroadcastModal(b); });
+  }
 
   // Listener de pedidos. Quando offline, ainda assinamos pra renderizar
   // corridas ativas do motorista (não pode perder uma entrega em andamento),

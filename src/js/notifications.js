@@ -118,8 +118,10 @@ export function playMessageSound() {
 
 let fcmListenersBound = false;
 let fcmTokenCb = null;
+let broadcastCb = null;
 
 export function onFcmToken(cb) { fcmTokenCb = cb; }
+export function onBroadcastPush(cb) { broadcastCb = cb; }
 
 function bindFcmListeners() {
   if (fcmListenersBound) return;
@@ -141,6 +143,20 @@ function bindFcmListeners() {
     const type = notif?.data?.type;
     if (type === "new_message") {
       playMessageSound();
+    } else if (type === "broadcast") {
+      // Comunicado: NÃO toca sirene de pedido. Mostra modal in-app + bipe curto.
+      try {
+        playMessageSound();
+      } catch { /* ignore */ }
+      if (broadcastCb) {
+        try {
+          broadcastCb({
+            id: notif?.data?.broadcastId,
+            title: notif?.data?.title || notif?.title || "Comunicado NaMão",
+            message: notif?.data?.body || notif?.body || "",
+          });
+        } catch (err) { console.warn("[broadcast] cb threw:", err); }
+      }
     } else {
       // Default: tratar como novo pedido
       notifyNewOrder({
