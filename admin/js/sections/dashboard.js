@@ -6,6 +6,7 @@ import { db, APP_ID, PLATFORM_FEE, DRIVER_SHARE } from "../firebase.js";
 import { formatBRL, formatDate, badge, ORDER_STATUS, escapeHtml } from "../util.js";
 
 const ORDERS_PATH = `artifacts/${APP_ID}/public/data/orders`;
+const MERCHANTS_PATH = `artifacts/${APP_ID}/public/data/merchants`;
 const DAY_MS = 86400000;
 
 async function safeCount(q) {
@@ -77,18 +78,52 @@ async function loadKpis() {
     query(ordersRef, where("status", "in", ["waiting_confirmation", "pending", "accepted", "in_transit"]))
   );
 
+  // Lojas (merchants)
+  let merchantsTotal = 0;
+  let merchantsActive = 0;
+  let merchantsVisible = 0; // ativas com produto
+  let merchantsCommissionFree = 0;
+  try {
+    const merchantsSnap = await getDocs(collection(db, MERCHANTS_PATH));
+    merchantsSnap.forEach((d) => {
+      const m = d.data();
+      merchantsTotal++;
+      if (m.isActive) merchantsActive++;
+      if (m.isActive && Number(m.productsCount || 0) > 0) merchantsVisible++;
+      if (m.commissionFree) merchantsCommissionFree++;
+    });
+  } catch (e) {
+    console.warn("merchants count failed", e);
+  }
+
+  // Clientes únicos (últimos 30 dias, agrega por customerId no escopo já carregado)
+  const customers = new Set();
+  let monthOrdersTotal = 0;
+  last30.forEach((d) => {
+    const o = d.data();
+    monthOrdersTotal++;
+    const cid = o.customerPhone ? String(o.customerPhone).replace(/\D/g, "") : (o.customerId || "");
+    if (cid) customers.add(cid);
+  });
+
   return {
     todayRevenue,
     todayCompleted,
     todayActive,
     monthRevenue,
     monthCompleted,
+    monthOrdersTotal,
     monthCommission: monthRevenue * PLATFORM_FEE,
     monthDriverPayouts: monthRevenue * DRIVER_SHARE,
+    monthUniqueCustomers: customers.size,
     driversTotal,
     driversApproved,
     driversPending,
     driversBlocked,
+    merchantsTotal,
+    merchantsActive,
+    merchantsVisible,
+    merchantsCommissionFree,
     activeOrdersCount: activeSnap.size,
   };
 }
@@ -132,13 +167,14 @@ export async function renderDashboard({ content }) {
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
       ${kpiCard({ label: "Receita Hoje",       value: formatBRL(kpis.todayRevenue),     sub: `${kpis.todayCompleted} pedidos concluídos`, icon: "fa-sack-dollar", color: "#22C55E" })}
       ${kpiCard({ label: "Pedidos Ativos",     value: String(kpis.activeOrdersCount),   sub: `${kpis.todayActive} hoje`, icon: "fa-box", color: "#3B82F6" })}
+      ${kpiCard({ label: "Lojas no catálogo",  value: String(kpis.merchantsVisible),    sub: `${kpis.merchantsActive} ativas · ${kpis.merchantsCommissionFree} NaMão ATIVO`, icon: "fa-store", color: "#8B5CF6" })}
       ${kpiCard({ label: "Motoristas",         value: String(kpis.driversTotal),         sub: `${kpis.driversApproved} aprovados · ${kpis.driversPending} pendentes`, icon: "fa-motorcycle", color: "#F59E0B" })}
-      ${kpiCard({ label: "Bloqueados",         value: String(kpis.driversBlocked),       sub: "motoristas banidos", icon: "fa-ban", color: "#EF4444" })}
     </div>
 
     <h2 class="text-sm font-extrabold uppercase tracking-wider text-slate-500 mb-3">Últimos 30 dias</h2>
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+    <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
       ${kpiCard({ label: "Receita Total (30d)",      value: formatBRL(kpis.monthRevenue),         sub: `${kpis.monthCompleted} entregas concluídas`, icon: "fa-chart-line", color: "#22C55E" })}
+      ${kpiCard({ label: "Clientes únicos",          value: String(kpis.monthUniqueCustomers),    sub: `${kpis.monthOrdersTotal} pedidos totais`,    icon: "fa-users", color: "#06B6D4" })}
       ${kpiCard({ label: "Repasse Motoristas (85%)", value: formatBRL(kpis.monthDriverPayouts),   sub: "saiu (ou vai sair) via PIX",                icon: "fa-money-bill-transfer", color: "#3B82F6" })}
       ${kpiCard({ label: "Comissão Plataforma (15%)", value: formatBRL(kpis.monthCommission),     sub: "lucro bruto (antes taxas MP)",              icon: "fa-trophy", color: "#F59E0B" })}
     </div>

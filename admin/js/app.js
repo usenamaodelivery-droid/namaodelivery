@@ -5,6 +5,8 @@ import { showToast } from "./util.js";
 import { renderDashboard }  from "./sections/dashboard.js";
 import { renderDrivers }    from "./sections/drivers.js";
 import { renderOrders }     from "./sections/orders.js";
+import { renderMerchants }  from "./sections/merchants.js";
+import { renderCustomers }  from "./sections/customers.js";
 import { renderFinance }    from "./sections/finance.js";
 import { renderPayouts }    from "./sections/payouts.js";
 import { renderBlocks }     from "./sections/blocks.js";
@@ -16,6 +18,8 @@ const ROUTES = {
   dashboard: { render: renderDashboard, title: "Resumo",       subtitle: "Visão geral da operação" },
   drivers:   { render: renderDrivers,   title: "Motoristas",   subtitle: "Aprovar, bloquear, ver KYC" },
   orders:    { render: renderOrders,    title: "Pedidos",      subtitle: "Todos os pedidos da plataforma" },
+  merchants: { render: renderMerchants, title: "Lojas",        subtitle: "Cardápios Pedir NaMão: ativar, comissão, mini-admin" },
+  customers: { render: renderCustomers, title: "Clientes",     subtitle: "Histórico, ticket médio, recência" },
   finance:   { render: renderFinance,   title: "Financeiro",   subtitle: "Receita, comissões e lucro" },
   payouts:   { render: renderPayouts,   title: "Repasses PIX", subtitle: "Histórico de saques dos motoristas" },
   blocks:    { render: renderBlocks,    title: "Bloqueios",    subtitle: "Motoristas suspensos ou banidos" },
