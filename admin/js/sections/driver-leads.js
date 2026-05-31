@@ -13,12 +13,13 @@ import {
 let allLeads = [];
 let filterStatus = "all";
 let filterText = "";
+let contentRef = null;
 
 const STATUS = {
-  new:        { label: "Novo",         badge: "badge-yellow" },
-  contacted:  { label: "Contatado",    badge: "badge-blue"   },
-  enrolled:   { label: "Cadastrou",    badge: "badge-green"  },
-  rejected:   { label: "Recusado",     badge: "badge-red"    },
+  new:        { label: "Novo",         badge: "bg-yellow-100 text-yellow-700" },
+  contacted:  { label: "Contatado",    badge: "bg-blue-100 text-blue-700"     },
+  enrolled:   { label: "Cadastrou",    badge: "bg-green-100 text-green-700"   },
+  rejected:   { label: "Recusado",     badge: "bg-red-100 text-red-700"       },
 };
 
 const VEHICLES = {
@@ -30,7 +31,7 @@ const VEHICLES = {
 
 function statusBadge(s) {
   const v = STATUS[s] || STATUS.new;
-  return `<span class="badge ${v.badge}">${escapeHtml(v.label)}</span>`;
+  return `<span class="px-2 py-0.5 rounded-full text-tiny font-bold ${v.badge}">${escapeHtml(v.label)}</span>`;
 }
 
 async function loadLeads() {
@@ -77,132 +78,62 @@ function whatsappLink(phone, msg) {
 function row(l) {
   const phone = l.whatsapp ? l.whatsapp.replace(/(\d{2})(\d{4,5})(\d{4})/, "($1) $2-$3") : "—";
   const status = l.status || "new";
+  const cnhLabel = l.hasCnh === "yes" ? "Tem CNH" : l.hasCnh === "no" ? "Sem CNH" : "N/D";
   return `
-    <tr class="table-row border-t border-slate-100" data-id="${l.id}">
+    <tr class="border-t border-slate-100 hover:bg-slate-50" data-id="${l.id}">
       <td class="px-4 py-3">
         <div class="font-bold text-slate-800">${escapeHtml(l.name || "—")}</div>
-        <div class="text-tiny text-slate-500">${escapeHtml(l.city || "")}</div>
+        <div class="text-tiny text-slate-500">${escapeHtml(l.city || "")} · ${escapeHtml(cnhLabel)}</div>
       </td>
       <td class="px-4 py-3">
         <a href="${whatsappLink(l.whatsapp, `Oi ${l.name || ""}! Vi seu pré-cadastro no NaMão Entregador. Posso te ajudar a começar?`)}"
            target="_blank" rel="noopener"
            class="text-primary font-bold hover:underline">${escapeHtml(phone)}</a>
       </td>
-      <td class="px-4 py-3">${VEHICLES[l.vehicle] || "—"}</td>
+      <td class="px-4 py-3 text-sm">${VEHICLES[l.vehicle] || "—"}</td>
       <td class="px-4 py-3 text-tiny text-slate-500">${escapeHtml(l.source || "—")}</td>
       <td class="px-4 py-3 text-tiny text-slate-500">${formatDate(l.createdAt)}</td>
       <td class="px-4 py-3">${statusBadge(status)}</td>
       <td class="px-4 py-3">
-        <div class="flex items-center gap-1">
-          <button data-act="contact" class="text-tiny font-bold text-blue-600 hover:underline" title="Marcar como contatado">📞</button>
-          <button data-act="enrolled" class="text-tiny font-bold text-green-600 hover:underline" title="Marcar que cadastrou">✓</button>
-          <button data-act="reject" class="text-tiny font-bold text-red-600 hover:underline" title="Recusar/descartar">✗</button>
-          <button data-act="delete" class="text-tiny font-bold text-slate-400 hover:underline" title="Excluir">🗑</button>
+        <div class="flex items-center gap-2 text-sm">
+          <button data-act="contact" class="text-blue-600 hover:text-blue-800" title="Marcar como contatado">📞</button>
+          <button data-act="enrolled" class="text-green-600 hover:text-green-800" title="Marcar que cadastrou">✓</button>
+          <button data-act="reject" class="text-red-600 hover:text-red-800" title="Recusar/descartar">✗</button>
+          <button data-act="delete" class="text-slate-400 hover:text-slate-600" title="Excluir">🗑</button>
         </div>
       </td>
     </tr>
   `;
 }
 
-function render() {
+function paintTable() {
+  if (!contentRef) return;
   const list = filtered();
+  const tbody = contentRef.querySelector("[data-leads-tbody]");
+  if (tbody) {
+    tbody.innerHTML = list.length
+      ? list.map(row).join("")
+      : `<tr><td colspan="7" class="text-center py-10 text-slate-400 text-sm">Nenhum lead encontrado</td></tr>`;
+  }
+  const counter = contentRef.querySelector("[data-count]");
+  if (counter) counter.textContent = `${list.length} de ${allLeads.length}`;
   const counts = {
-    all: allLeads.length,
     new: allLeads.filter((l) => (l.status || "new") === "new").length,
     contacted: allLeads.filter((l) => l.status === "contacted").length,
     enrolled: allLeads.filter((l) => l.status === "enrolled").length,
   };
+  const k = contentRef.querySelector("[data-kpis]");
+  if (k) {
+    k.querySelector("[data-k-total]").textContent = allLeads.length;
+    k.querySelector("[data-k-new]").textContent = counts.new;
+    k.querySelector("[data-k-contacted]").textContent = counts.contacted;
+    k.querySelector("[data-k-enrolled]").textContent = counts.enrolled;
+  }
+  bindRowActions();
+}
 
-  const root = document.getElementById("section-root");
-  if (!root) return;
-  root.innerHTML = `
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-      <div class="card-stat">
-        <div class="text-tiny font-bold text-slate-500 uppercase">Total</div>
-        <div class="text-2xl font-black text-slate-800">${counts.all}</div>
-      </div>
-      <div class="card-stat">
-        <div class="text-tiny font-bold text-slate-500 uppercase">Novos</div>
-        <div class="text-2xl font-black text-yellow-600">${counts.new}</div>
-      </div>
-      <div class="card-stat">
-        <div class="text-tiny font-bold text-slate-500 uppercase">Contatados</div>
-        <div class="text-2xl font-black text-blue-600">${counts.contacted}</div>
-      </div>
-      <div class="card-stat">
-        <div class="text-tiny font-bold text-slate-500 uppercase">Cadastraram</div>
-        <div class="text-2xl font-black text-accent">${counts.enrolled}</div>
-      </div>
-    </div>
-
-    <div class="bg-white rounded-2xl shadow-card mb-4 p-4 flex flex-wrap items-center gap-3">
-      <div class="flex items-center gap-2">
-        <label class="text-tiny font-bold text-slate-600 uppercase">Status:</label>
-        <select id="lead-filter-status" class="border-2 border-slate-200 rounded-lg px-3 py-2 text-sm font-bold">
-          <option value="all">Todos</option>
-          <option value="new" ${filterStatus==="new"?"selected":""}>Novos</option>
-          <option value="contacted" ${filterStatus==="contacted"?"selected":""}>Contatados</option>
-          <option value="enrolled" ${filterStatus==="enrolled"?"selected":""}>Cadastraram</option>
-          <option value="rejected" ${filterStatus==="rejected"?"selected":""}>Recusados</option>
-        </select>
-      </div>
-      <input id="lead-filter-text" placeholder="Buscar por nome/WhatsApp/cidade…"
-             class="flex-1 min-w-[200px] border-2 border-slate-200 rounded-lg px-3 py-2 text-sm" value="${escapeHtml(filterText)}"/>
-      <button id="lead-export" class="bg-slate-800 text-white font-bold rounded-lg px-4 py-2 text-sm hover:bg-slate-900">
-        <i class="fa-solid fa-download mr-1"></i> CSV
-      </button>
-      <button id="lead-refresh" class="bg-primary text-white font-bold rounded-lg px-4 py-2 text-sm hover:opacity-90">
-        <i class="fa-solid fa-rotate"></i>
-      </button>
-    </div>
-
-    <div class="bg-white rounded-2xl shadow-card overflow-hidden">
-      <table class="w-full">
-        <thead class="bg-slate-50 text-tiny font-bold text-slate-500 uppercase">
-          <tr>
-            <th class="px-4 py-3 text-left">Nome / Cidade</th>
-            <th class="px-4 py-3 text-left">WhatsApp</th>
-            <th class="px-4 py-3 text-left">Veículo</th>
-            <th class="px-4 py-3 text-left">Origem</th>
-            <th class="px-4 py-3 text-left">Recebido</th>
-            <th class="px-4 py-3 text-left">Status</th>
-            <th class="px-4 py-3 text-left">Ações</th>
-          </tr>
-        </thead>
-        <tbody id="leads-tbody">
-          ${list.length === 0 ?
-            `<tr><td colspan="7" class="px-4 py-8 text-center text-slate-400">Nenhum pré-cadastro ainda. Quando alguém preencher o form em delivery.usenamao.com/motorista/cadastro, aparece aqui.</td></tr>`
-            : list.map(row).join("")}
-        </tbody>
-      </table>
-    </div>
-  `;
-
-  document.getElementById("lead-filter-status").onchange = (e) => {
-    filterStatus = e.target.value;
-    render();
-  };
-  document.getElementById("lead-filter-text").oninput = debounce((e) => {
-    filterText = e.target.value;
-    render();
-  }, 200);
-  document.getElementById("lead-refresh").onclick = () => renderDriverLeads();
-  document.getElementById("lead-export").onclick = () => {
-    const rows = filtered().map((l) => ({
-      Nome: l.name || "",
-      WhatsApp: l.whatsapp || "",
-      Cidade: l.city || "",
-      Veiculo: l.vehicle || "",
-      "Tem CNH": l.hasCnh || "",
-      Origem: l.source || "",
-      Status: l.status || "new",
-      Recebido: formatDate(l.createdAt),
-    }));
-    downloadCsv("pre-cadastros-motoristas.csv", rows);
-  };
-
-  // Ações por linha
-  document.querySelectorAll("#leads-tbody tr").forEach((tr) => {
+function bindRowActions() {
+  contentRef.querySelectorAll("[data-leads-tbody] tr[data-id]").forEach((tr) => {
     const id = tr.getAttribute("data-id");
     tr.querySelectorAll("button[data-act]").forEach((btn) => {
       btn.onclick = async (e) => {
@@ -226,7 +157,15 @@ function render() {
             await removeLead(id);
             showToast("Excluído", "info");
           }
-          renderDriverLeads();
+          const lead = allLeads.find((l) => l.id === id);
+          if (lead) {
+            if (act === "delete") {
+              allLeads = allLeads.filter((l) => l.id !== id);
+            } else {
+              lead.status = act === "contact" ? "contacted" : act === "enrolled" ? "enrolled" : "rejected";
+            }
+          }
+          paintTable();
         } catch (err) {
           console.error("[driver-leads] action failed:", err);
           showToast("Erro: " + (err.message || err), "error");
@@ -236,18 +175,100 @@ function render() {
   });
 }
 
-export async function renderDriverLeads() {
-  const root = document.getElementById("section-root");
-  if (root) {
-    root.innerHTML = `<div class="bg-white rounded-2xl p-8 text-center text-slate-400">Carregando pré-cadastros…</div>`;
-  }
+export async function renderDriverLeads({ content, actionsRoot }) {
+  contentRef = content;
+  content.innerHTML = `<div class="text-center py-12 text-slate-400"><i class="fa-solid fa-spinner fa-spin text-2xl"></i><p class="mt-2 text-sm">Carregando pré-cadastros...</p></div>`;
+
   try {
     allLeads = await loadLeads();
-    render();
-  } catch (err) {
-    console.error("[driver-leads] load failed:", err);
-    if (root) {
-      root.innerHTML = `<div class="bg-white rounded-2xl p-8 text-center text-red-500">Erro ao carregar: ${escapeHtml(err.message || String(err))}</div>`;
-    }
+  } catch (e) {
+    console.error("[driver-leads] load failed:", e);
+    content.innerHTML = `<div class="bg-red-50 text-red-700 p-4 rounded-xl"><b>Erro ao carregar:</b> ${escapeHtml(e.message || String(e))}</div>`;
+    return;
   }
+
+  if (actionsRoot) {
+    actionsRoot.innerHTML = `
+      <button id="csv-leads" class="px-3 py-2 text-xs font-bold rounded-lg bg-slate-100 hover:bg-slate-200">
+        <i class="fa-solid fa-file-csv mr-1"></i>CSV
+      </button>
+    `;
+    actionsRoot.querySelector("#csv-leads").addEventListener("click", () => {
+      const rows = [["ID", "Nome", "WhatsApp", "Cidade", "Veículo", "CNH", "Status", "Cadastro", "UA", "Referer"]];
+      filtered().forEach((l) => rows.push([
+        l.id, l.name || "", l.whatsapp || "", l.city || "", l.vehicle || "", l.hasCnh || "",
+        l.status || "new", new Date(l.createdAt || 0).toISOString(), l.userAgent || "", l.referer || "",
+      ]));
+      downloadCsv(`pre-cadastros-${Date.now()}.csv`, rows);
+    });
+  }
+
+  content.innerHTML = `
+    <div data-kpis class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+      <div class="bg-white rounded-2xl shadow-card p-4">
+        <div class="text-tiny font-bold text-slate-500 uppercase">Total</div>
+        <div class="text-2xl font-black text-slate-800" data-k-total>0</div>
+      </div>
+      <div class="bg-white rounded-2xl shadow-card p-4">
+        <div class="text-tiny font-bold text-slate-500 uppercase">Novos</div>
+        <div class="text-2xl font-black text-yellow-600" data-k-new>0</div>
+      </div>
+      <div class="bg-white rounded-2xl shadow-card p-4">
+        <div class="text-tiny font-bold text-slate-500 uppercase">Contatados</div>
+        <div class="text-2xl font-black text-blue-600" data-k-contacted>0</div>
+      </div>
+      <div class="bg-white rounded-2xl shadow-card p-4">
+        <div class="text-tiny font-bold text-slate-500 uppercase">Cadastraram</div>
+        <div class="text-2xl font-black text-green-600" data-k-enrolled>0</div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-card overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-100 flex flex-wrap items-center gap-3 justify-between">
+        <div class="flex items-center gap-2 flex-wrap">
+          <select id="lead-status-filter" class="px-3 py-2 text-sm font-bold rounded-lg border border-slate-200 bg-white">
+            <option value="all">Todos os status</option>
+            <option value="new">Novos</option>
+            <option value="contacted">Contatados</option>
+            <option value="enrolled">Cadastraram</option>
+            <option value="rejected">Recusados</option>
+          </select>
+          <input id="lead-search" type="text" placeholder="🔍 Nome, WhatsApp, cidade..." class="px-3 py-2 text-sm rounded-lg border border-slate-200 w-64" />
+        </div>
+        <p class="text-xs text-slate-500"><span data-count></span> leads</p>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
+            <tr>
+              <th class="px-4 py-2 text-left">Nome</th>
+              <th class="px-4 py-2 text-left">WhatsApp</th>
+              <th class="px-4 py-2 text-left">Veículo</th>
+              <th class="px-4 py-2 text-left">Origem</th>
+              <th class="px-4 py-2 text-left">Quando</th>
+              <th class="px-4 py-2 text-left">Status</th>
+              <th class="px-4 py-2 text-left">Ações</th>
+            </tr>
+          </thead>
+          <tbody data-leads-tbody></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  const statusSelect = content.querySelector("#lead-status-filter");
+  statusSelect.value = filterStatus;
+  statusSelect.addEventListener("change", (e) => {
+    filterStatus = e.target.value;
+    paintTable();
+  });
+
+  const searchInput = content.querySelector("#lead-search");
+  searchInput.value = filterText;
+  searchInput.addEventListener("input", debounce((e) => {
+    filterText = e.target.value.trim();
+    paintTable();
+  }, 200));
+
+  paintTable();
 }
