@@ -331,9 +331,18 @@ async function openDetail(merchantId) {
           <code data-token-text class="text-xs break-all block font-mono bg-slate-50 p-2 rounded"></code>
           <p class="text-xs text-slate-500 mt-2">Link completo (pra mandar pelo WhatsApp):</p>
           <code data-token-url class="text-xs break-all block font-mono bg-slate-50 p-2 rounded"></code>
-          <button data-act="copy-url" class="mt-2 px-3 py-1.5 text-xs bg-accent text-white font-bold rounded-lg">
-            <i class="fa-solid fa-copy mr-1"></i>Copiar link completo
-          </button>
+          <div class="mt-2 flex gap-2 flex-wrap">
+            <button data-act="copy-url" class="px-3 py-1.5 text-xs bg-accent text-white font-bold rounded-lg">
+              <i class="fa-solid fa-copy mr-1"></i>Copiar link
+            </button>
+            ${m.whatsapp ? `
+              <a data-act="wa-send" target="_blank" rel="noopener" class="px-3 py-1.5 text-xs bg-[#25D366] text-white font-bold rounded-lg hover:bg-[#1ebe57]">
+                <i class="fa-brands fa-whatsapp mr-1"></i>Enviar pelo WhatsApp
+              </a>
+            ` : `
+              <span class="px-3 py-1.5 text-xs bg-slate-200 text-slate-500 rounded-lg">WhatsApp da loja não cadastrado</span>
+            `}
+          </div>
         </div>
       </div>
 
@@ -413,10 +422,17 @@ async function openDetail(merchantId) {
           const box = document.querySelector("#modal-content [data-token-output]");
           const txt = document.querySelector("#modal-content [data-token-text]");
           const urlEl = document.querySelector("#modal-content [data-token-url]");
+          const waEl = document.querySelector("#modal-content [data-act='wa-send']");
           if (box && txt && urlEl) {
             txt.textContent = plain;
             urlEl.textContent = url;
             box.classList.remove("hidden");
+          }
+          if (waEl && m.whatsapp) {
+            const digits = String(m.whatsapp).replace(/\D/g, "");
+            const phone = digits.length >= 10 ? (digits.startsWith("55") ? digits : `55${digits}`) : digits;
+            const msg = `🔗 Painel da sua loja "${m.name || "Pedir NaMão"}" — NaMão\n\nGuarda esse link (não compartilha com ninguém, qualquer um com ele aceita pedidos):\n\n${url}\n\n• Salva esta mensagem no seu WhatsApp\n• Adiciona o link na tela inicial do celular`;
+            waEl.href = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
           }
           showToast("Token rotacionado", "success");
         } else if (act === "copy-url") {
