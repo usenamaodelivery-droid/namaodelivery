@@ -7,6 +7,9 @@
       "hosting": {
         "admin": [
           "admin-namao"
+        ],
+        "entregador": [
+          "entregador-namao"
         ]
       }
     }
