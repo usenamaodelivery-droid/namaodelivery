@@ -8,6 +8,12 @@ service cloud.firestore {
     function isSelf(uid)    { return isSignedIn() && request.auth.uid == uid; }
     function unchanged(k)   { return request.resource.data[k] == resource.data[k]; }
 
+    // Collection group queries (admin dashboard) — sem isso, queries
+    // collectionGroup("profile") falham com "Missing or insufficient permissions".
+    match /{path=**}/profile/{docId} {
+      allow read: if isAdmin();
+    }
+
     match /artifacts/namao-delivery-prod/public/data/orders/{orderId} {
       allow read: if isSignedIn();
 
@@ -59,6 +65,24 @@ service cloud.firestore {
       );
 
       allow delete: if isAdmin();
+
+      // Chat interno cliente ↔ motorista. Qualquer usuário autenticado
+      // envolvido no pedido pode ler; o motorista responsável pode escrever
+      // mensagens. Mensagens do cliente entram via Admin SDK no servidor
+      // da PWA (bypass rules), então aqui só autorizamos o motorista.
+      match /messages/{messageId} {
+        allow read: if isSignedIn();
+
+        allow create: if isSignedIn()
+          && request.resource.data.from == 'driver'
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 500
+          && request.resource.data.at is number;
+
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
     }
 
     // Logs de segurança — qualquer usuário autenticado pode CRIAR um log
@@ -82,7 +106,8 @@ service cloud.firestore {
         && !('balance' in request.resource.data);
 
       allow update: if (
-        // Próprio usuário: atualiza dados pessoais, nunca balance/status/claims
+        // Próprio usuário: atualiza dados pessoais (incluindo chave PIX),
+        // nunca balance/status/claims
         (isSelf(userId)
           && unchanged('status')
           && unchanged('balance')
@@ -101,6 +126,52 @@ service cloud.firestore {
       );
 
       allow delete: if isAdmin();
+    }
+
+    // Repasses (payouts) PIX pra motoristas. Escrita apenas via Cloud Function
+    // (Admin SDK bypassa rules). Cliente só lê os próprios payouts.
+    match /artifacts/namao-delivery-prod/payouts/{payoutId} {
+      allow read: if isSignedIn() && (
+        isAdmin() || resource.data.driverId == request.auth.uid
+      );
+      allow create, update, delete: if false; // só Cloud Function
+    }
+
+    // Comunicados (broadcast) — admin escreve, qualquer logado lê.
+    match /artifacts/namao-delivery-prod/public/data/broadcasts/{bcId} {
+      allow read:   if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Pré-cadastros de motorista vindos do portal /motorista.
+    // Cliente PWA escreve via Admin SDK (rota /api/motorista/lead).
+    // Admin lê/atualiza/deleta pelo dashboard.
+    match /artifacts/namao-delivery-prod/public/data/driverLeads/{leadId} {
+      allow read:   if isAdmin();
+      allow create: if false; // só Admin SDK
+      allow update, delete: if isAdmin();
+    }
+
+    // Configurações gerais — admin escreve, qualquer logado lê.
+    match /artifacts/namao-delivery-prod/config/{docId} {
+      allow read:   if isSignedIn();
+      allow write:  if isAdmin();
+    }
+
+    // Lojas (merchants) Pedir NaMão — leitura pública (o catálogo do PWA
+    // já é público via Admin SDK na API; abrir leitura aqui só simplifica o
+    // dashboard sem expor nada novo). Apenas admin escreve direto pelo
+    // browser. accessTokenHash NUNCA é exposto em queries client porque
+    // os listeners do dashboard só rodam logados como admin.
+    match /artifacts/namao-delivery-prod/public/data/merchants/{merchantId} {
+      allow read:  if true;
+      allow write: if isAdmin();
+
+      // Catálogo de produtos da loja.
+      match /products/{productId} {
+        allow read:  if true;
+        allow write: if isAdmin();
+      }
     }
   }
 }

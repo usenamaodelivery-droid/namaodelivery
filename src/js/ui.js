@@ -42,6 +42,7 @@ export function switchView(view) {
     document.getElementById("view-atividade")?.classList.remove("hidden");
   } else if (view === "perfil") {
     document.getElementById("view-perfil")?.classList.remove("hidden");
+    try { window.refreshPermissionStatuses?.(); } catch { /* ignore */ }
   } else if (view === "admin") {
     document.getElementById("view-admin")?.classList.remove("hidden");
     document.getElementById("bottom-nav")?.classList.add("hidden");
@@ -75,14 +76,33 @@ function updateBottomNav(view) {
   }
 }
 
-export function updateFileLabel(inputId, labelId) {
+export function updateFileLabel(inputId, labelId, previewId) {
   const inp = document.getElementById(inputId);
   const lbl = document.getElementById(labelId);
   if (!inp || !lbl) return;
-  if (inp.files && inp.files.length > 0) {
-    lbl.classList.remove("hidden");
-  } else {
+  const file = inp.files && inp.files[0];
+  if (!file) {
     lbl.classList.add("hidden");
+    if (previewId) {
+      const wrap = document.getElementById(previewId);
+      if (wrap) wrap.innerHTML = "";
+    }
+    return;
+  }
+  lbl.classList.remove("hidden");
+  if (previewId) {
+    const wrap = document.getElementById(previewId);
+    if (wrap) {
+      const url = URL.createObjectURL(file);
+      wrap.innerHTML = `
+        <div class="mt-3 relative rounded-xl overflow-hidden border-2 border-success/40 bg-white">
+          <img src="${url}" alt="preview" class="w-full h-40 object-cover" />
+          <button type="button" onclick="document.getElementById('${inputId}').click()"
+            class="absolute top-2 right-2 bg-white/90 text-primary text-xs font-extrabold px-3 py-1 rounded-full shadow-md uppercase tracking-wider">
+            <i class="fa-solid fa-rotate"></i> Trocar
+          </button>
+        </div>`;
+    }
   }
 }
 

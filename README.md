@@ -1,6 +1,6 @@
-# NaMão Delivery
+# Delivery NaMão
 
-App de delivery (cliente + motorista + admin) construído com **Capacitor 8** + **Firebase** (Auth, Firestore, Storage, Cloud Functions). Empacotado como APK Android nativo.
+App nativo do entregador construído com **Capacitor 8** + **Firebase** (Auth, Firestore, Storage, Cloud Functions). Empacotado como APK Android. O cliente usa a PWA `delivery.usenamao.com` e o app **Pedir NaMão**.
 
 ## Arquitetura
 
