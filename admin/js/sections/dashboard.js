@@ -175,8 +175,8 @@ export async function renderDashboard({ content }) {
     <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
       ${kpiCard({ label: "Receita Total (30d)",      value: formatBRL(kpis.monthRevenue),         sub: `${kpis.monthCompleted} entregas concluídas`, icon: "fa-chart-line", color: "#22C55E" })}
       ${kpiCard({ label: "Clientes únicos",          value: String(kpis.monthUniqueCustomers),    sub: `${kpis.monthOrdersTotal} pedidos totais`,    icon: "fa-users", color: "#06B6D4" })}
-      ${kpiCard({ label: "Repasse Motoristas (85%)", value: formatBRL(kpis.monthDriverPayouts),   sub: "saiu (ou vai sair) via PIX",                icon: "fa-money-bill-transfer", color: "#3B82F6" })}
-      ${kpiCard({ label: "Comissão Plataforma (15%)", value: formatBRL(kpis.monthCommission),     sub: "lucro bruto (antes taxas MP)",              icon: "fa-trophy", color: "#F59E0B" })}
+      ${kpiCard({ label: "Repasse Motoristas (85% frete)", value: formatBRL(kpis.monthDriverPayouts),   sub: "saiu (ou vai sair) via PIX",                icon: "fa-money-bill-transfer", color: "#3B82F6" })}
+      ${kpiCard({ label: "Margem NaMão (15% frete)", value: formatBRL(kpis.monthCommission),     sub: "spread sobre frete · não cobrado do lojista", icon: "fa-trophy", color: "#F59E0B" })}
     </div>
 
     <div class="bg-white rounded-2xl shadow-card overflow-hidden">

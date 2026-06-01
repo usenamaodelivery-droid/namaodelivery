@@ -87,8 +87,8 @@ async function openDetail(orderId) {
       </div>
 
       <div class="bg-slate-50 rounded-xl p-3 mb-4 grid grid-cols-3 gap-2 text-center">
-        <div><p class="text-tiny text-slate-500">Motorista (85%)</p><p class="font-black">${formatBRL(driverEarn)}</p></div>
-        <div><p class="text-tiny text-slate-500">Plataforma (15%)</p><p class="font-black text-accent">${formatBRL(platform)}</p></div>
+        <div><p class="text-tiny text-slate-500">Motorista (85% frete)</p><p class="font-black">${formatBRL(driverEarn)}</p></div>
+        <div><p class="text-tiny text-slate-500">Margem NaMão (15% frete)</p><p class="font-black text-accent">${formatBRL(platform)}</p></div>
         <div><p class="text-tiny text-slate-500">Status PIX</p><p class="font-bold text-xs">${escapeHtml(o.paymentStatus || "—")}</p></div>
       </div>
 

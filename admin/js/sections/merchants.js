@@ -12,7 +12,7 @@
 import {
   collection, query, where, orderBy, limit, getDocs, doc, getDoc, updateDoc,
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { db, APP_ID, PLATFORM_FEE } from "../firebase.js";
+import { db, APP_ID } from "../firebase.js";
 import {
   formatBRL, formatDate, badge, ORDER_STATUS, escapeHtml, showToast,
   confirmDialog, debounce, downloadCsv,
@@ -148,9 +148,15 @@ function statusBadge(m) {
   return `<span class="badge badge-green">Ativa</span>`;
 }
 
+// Comissão sobre produtos (subtotal do cardápio): 5% para lojas Pedir-only,
+// 0% para lojas linkadas à NaMão social. PLATFORM_FEE (15%) é a margem sobre
+// frete e NUNCA debita o lojista — é o spread entre o que o cliente paga e os
+// 85% que vai pro motorista. Não confundir.
+const MERCHANT_PRODUCT_COMMISSION = 0.05;
+
 function commissionBadge(m) {
-  if (m.commissionFree) return `<span class="badge badge-blue">NaMão ATIVO · 0%</span>`;
-  return `<span class="badge badge-gray">${(PLATFORM_FEE * 100).toFixed(0)}% comissão</span>`;
+  if (m.commissionFree) return `<span class="badge badge-blue">NaMão · 0%</span>`;
+  return `<span class="badge badge-gray">${(MERCHANT_PRODUCT_COMMISSION * 100).toFixed(0)}% sobre produtos</span>`;
 }
 
 function filtered() {
@@ -310,8 +316,8 @@ async function openDetail(merchantId) {
         <div class="grid grid-cols-3 gap-3 text-sm">
           <div><p class="text-tiny text-slate-500">Total</p><p class="font-black text-lg">${formatBRL(stats.total)}</p></div>
           <div><p class="text-tiny text-slate-500">Pedidos</p><p class="font-black text-lg">${stats.count}</p></div>
-          <div><p class="text-tiny text-slate-500">${m.commissionFree ? "Comissão" : `Comissão (${(PLATFORM_FEE * 100).toFixed(0)}%)`}</p>
-               <p class="font-black text-lg">${m.commissionFree ? "Isento" : formatBRL(stats.total * PLATFORM_FEE)}</p></div>
+          <div><p class="text-tiny text-slate-500">${m.commissionFree ? "Comissão produtos" : `Comissão produtos (${(MERCHANT_PRODUCT_COMMISSION * 100).toFixed(0)}%)`}</p>
+               <p class="font-black text-lg">${m.commissionFree ? "Isento" : formatBRL(stats.total * MERCHANT_PRODUCT_COMMISSION)}</p></div>
         </div>
       </div>
 
@@ -402,7 +408,7 @@ async function openDetail(merchantId) {
           const newVal = act === "freecomm";
           const ok = await confirmDialog(newVal
             ? "Isentar comissão? Loja não paga os 5% sobre os produtos."
-            : `Cobrar comissão de ${(PLATFORM_FEE * 100).toFixed(0)}% novamente?`);
+            : `Cobrar comissão de ${(MERCHANT_PRODUCT_COMMISSION * 100).toFixed(0)}% sobre produtos novamente?`);
           if (!ok) return;
           await setCommissionFree(merchantId, newVal);
           showToast(newVal ? "Loja isenta de comissão" : "Comissão reativada", "success");
