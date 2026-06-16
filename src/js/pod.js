@@ -203,9 +203,16 @@ export async function confirmPickupWithPhoto() {
       pickupPhotoUrl = await compressImage(file, 800, 0.6);
     }
 
-    await markInTransit(currentPickupOrderId, pickupPhotoUrl);
+    // Fecha na hora — a gravação roda em segundo plano pra não travar o motorista.
+    const orderId = currentPickupOrderId;
     closePickupPhoto();
-    showToast("Coleta confirmada — siga para o destino");
+    showToast("Confirmando coleta…");
+    markInTransit(orderId, pickupPhotoUrl)
+      .then(() => showToast("Coleta confirmada — siga para o destino"))
+      .catch((err) => {
+        console.error(err);
+        showToast(err?.message || "Falha ao confirmar coleta — tente de novo");
+      });
   } catch (err) {
     console.error(err);
     showToast(err?.message || "Falha ao confirmar coleta");
@@ -255,9 +262,18 @@ export async function confirmDeliveryWithPOD(driverId) {
       signatureUrl = canvas.toDataURL("image/png");
     }
 
-    await completeOrder({ orderId: currentOrderId, driverId, photoUrl, signatureUrl });
+    // Fecha na hora — a gravação + crédito rodam em segundo plano pra não
+    // travar o motorista. Em caso de erro, o pedido continua em trânsito e o
+    // motorista pode tentar de novo (aviso por toast).
+    const orderId = currentOrderId;
     closePOD();
-    showToast("Entrega finalizada! Ganhos de 85% creditados.");
+    showToast("Finalizando entrega…");
+    completeOrder({ orderId, driverId, photoUrl, signatureUrl })
+      .then(() => showToast("Entrega finalizada! Ganhos creditados (85% do frete)."))
+      .catch((err) => {
+        console.error(err);
+        showToast(err.message || "Falha ao finalizar — tente de novo");
+      });
   } catch (err) {
     console.error(err);
     showToast(err.message || "Falha ao enviar prova");
