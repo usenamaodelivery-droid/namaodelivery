@@ -17,6 +17,7 @@ import {
 import { subscribeBroadcasts, showBroadcastModal } from "./broadcasts.js";
 import {
   subscribeOrders,
+  subscribeDriverOrders,
   acceptOrder,
   subscribeMessages,
   sendMessage,
@@ -55,9 +56,9 @@ import {
   invalidateDriverMapSize,
 } from "./maps.js";
 import {
-  DRIVER_SHARE,
   SUPPORT_WHATSAPP,
 } from "./firebaseConfig.js";
+import { driverEarningBRL, orderFreteBRL, namaoRevenueBRL } from "./pricing.js";
 import { runVerification } from "./aiVerification.js";
 
 let currentUser = null;
@@ -131,16 +132,16 @@ onAuth(async (user) => {
     unsubBroadcasts = subscribeBroadcasts((b) => { showBroadcastModal(b); });
   }
 
-  // Listener de pedidos. Quando offline, ainda assinamos pra renderizar
-  // corridas ativas do motorista (não pode perder uma entrega em andamento),
-  // mas o filtro de "available" já zera a lista nesse caso.
-  unsubOrders = subscribeOrders((list) => {
+  // Listener de pedidos enxuto: só disponíveis (pending) + os do motorista.
+  // Evita baixar todos os pedidos concluídos (com POD em base64) de todo mundo.
+  const onOrders = (list) => {
     orders = list;
     try { processNewOrderAlert(list); } catch (err) {
       console.warn("[notifications] failed to process update:", err);
     }
     renderAll();
-  });
+  };
+  unsubOrders = subscribeDriverOrders(user.uid, onOrders);
 
   initDriverMap();
   initSignaturePad();
@@ -153,11 +154,16 @@ onAuth(async (user) => {
     window.__isAdmin = Boolean(token.claims?.admin);
   } catch { window.__isAdmin = false; }
 
-  if (window.__isAdmin && !unsubSecurity) {
-    unsubSecurity = subscribeSecurityLogs((items) => {
-      securityLogs = items;
-      renderSecurityLogs();
-    });
+  if (window.__isAdmin) {
+    // Admin precisa enxergar TODOS os pedidos no painel — troca pra subscrição completa.
+    if (unsubOrders) { unsubOrders(); }
+    unsubOrders = subscribeOrders(onOrders);
+    if (!unsubSecurity) {
+      unsubSecurity = subscribeSecurityLogs((items) => {
+        securityLogs = items;
+        renderSecurityLogs();
+      });
+    }
   }
 });
 
@@ -262,7 +268,7 @@ function computeStats(predicate) {
     if (o.driverId !== currentUser.uid) continue;
     if (o.status !== "completed") continue;
     if (!predicate(o.completedAt || o.createdAt)) continue;
-    earnings += Number(o.driverEarnings ?? (o.price * DRIVER_SHARE) ?? 0);
+    earnings += Number(o.driverEarnings ?? driverEarningBRL(o));
     count += 1;
     km += Number(o.distanceKm || 0);
   }
@@ -322,7 +328,7 @@ function renderDriverHistoryCard(o) {
     completed: { label: "Entregue", color: "bg-green-100 text-green-800", icon: "fa-circle-check" },
     cancelled: { label: "Cancelada", color: "bg-red-100 text-red-800", icon: "fa-circle-xmark" }
   }[o.status] || { label: o.status, color: "bg-gray-100 text-gray-700", icon: "fa-circle" };
-  const earning = Number(o.driverEarnings ?? (o.price * DRIVER_SHARE) ?? 0);
+  const earning = Number(o.driverEarnings ?? driverEarningBRL(o));
   const itemIcon = {
     Comida: "fa-burger",
     Documentos: "fa-file-alt",
@@ -532,7 +538,7 @@ function getDriverPosition() {
 }
 
 function renderAvailableOrderCard(o) {
-  const earning = (o.price * DRIVER_SHARE).toFixed(2).replace(".", ",");
+  const earning = driverEarningBRL(o).toFixed(2).replace(".", ",");
   const itemIcon = {
     Comida: "fa-burger",
     Documentos: "fa-file-alt",
@@ -551,7 +557,7 @@ function renderAvailableOrderCard(o) {
 
   // R$/km da corrida — ajuda motorista decidir se vale a pena
   const rsPerKm = rideKm && Number(rideKm) > 0
-    ? (o.price * DRIVER_SHARE / Number(rideKm)).toFixed(2).replace(".", ",")
+    ? (driverEarningBRL(o) / Number(rideKm)).toFixed(2).replace(".", ",")
     : null;
 
   // Info do cliente + estabelecimento + descrição do item — motorista decide informado
@@ -600,8 +606,8 @@ function renderAvailableOrderCard(o) {
 function openOrderDetails(orderId) {
   const o = orders.find((x) => x.id === orderId);
   if (!o) return;
-  const earning = (o.price * DRIVER_SHARE).toFixed(2).replace(".", ",");
-  const total = (Number(o.price) || 0).toFixed(2).replace(".", ",");
+  const earning = driverEarningBRL(o).toFixed(2).replace(".", ",");
+  const frete = orderFreteBRL(o).toFixed(2).replace(".", ",");
   const km = o.distanceKm ? `${Number(o.distanceKm).toFixed(1)} km` : "—";
   const shortId = (o.id || "").slice(-6).toUpperCase();
   const customer = o.customerName || "Cliente";
@@ -635,7 +641,7 @@ function openOrderDetails(orderId) {
         <div class="bg-gray-50 rounded-xl p-3 border border-gray-100">
           <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Você ganha</p>
           <p class="text-xl font-black text-success">R$ ${earning}</p>
-          <p class="text-[10px] font-bold text-gray-400">de R$ ${total} (85%)</p>
+          <p class="text-[10px] font-bold text-gray-400">85% do frete (R$ ${frete})</p>
         </div>
         <div class="bg-gray-50 rounded-xl p-3 border border-gray-100">
           <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Distância</p>
@@ -673,7 +679,7 @@ window.closeOrderDetails = closeOrderDetails;
 // mapa fullscreen, status fininho no topo, botões grandes fixos no rodapé,
 // FAB de chat. Sem cartões/scroll empilhados.
 function populateActiveDeliveryUI(o) {
-  const earning = (o.price * DRIVER_SHARE).toFixed(2).replace(".", ",");
+  const earning = driverEarningBRL(o).toFixed(2).replace(".", ",");
   const isInTransit = o.status === "in_transit";
   const km = o.distanceKm ? `${Number(o.distanceKm).toFixed(1)} km` : "";
 
@@ -882,10 +888,10 @@ async function sendChatFromUI() {
 function renderAdminPanel() {
   const el = document.getElementById("admin-orders-list");
   if (!el) return;
-  const gross = orders
-    .filter((o) => o.status === "completed")
-    .reduce((a, b) => a + Number(b.price || 0), 0);
-  const net = gross * 0.15;
+  const completed = orders.filter((o) => o.status === "completed");
+  // Gross = total transacionado (GMV). Net = receita da NaMão: 15% do frete + 5% do produto.
+  const gross = completed.reduce((a, b) => a + Number(b.price || 0), 0);
+  const net = completed.reduce((a, b) => a + namaoRevenueBRL(b), 0);
   const grossEl = document.getElementById("admin-gross");
   const netEl = document.getElementById("admin-net");
   if (grossEl) grossEl.innerText = `R$ ${gross.toFixed(2).replace(".", ",")}`;
@@ -942,12 +948,33 @@ async function acceptOrderFromUI(orderId) {
     showToast("Seu cadastro de motorista precisa estar aprovado");
     return;
   }
+  const prev = orders.find((o) => o.id === orderId);
+  if (!prev) return;
+  if (prev.status !== "pending") {
+    showToast("Esse pedido já foi aceito");
+    return;
+  }
+  stopOrderAlert(); // Para o som/vibração ao aceitar a corrida
+
+  // Update otimista: vira corrida ativa NA HORA, sem esperar o round-trip do
+  // Firestore. A confirmação roda em segundo plano; se outro motorista pegou
+  // antes, revertemos.
+  orders = orders.map((o) =>
+    o.id === orderId
+      ? { ...o, status: "accepted", driverId: currentUser.uid, driverName: driverProfile.name, acceptedAt: Date.now() }
+      : o,
+  );
+  switchView("inicio");
+  renderAll();
+
   try {
-    stopOrderAlert(); // Para o som/vibração ao aceitar a corrida
     await acceptOrder(orderId, currentUser.uid, driverProfile.name);
     await startTracking(orderId);
     showToast("Corrida aceita — vá para a coleta");
   } catch (err) {
+    // Reverte o estado local se a corrida não era mais nossa.
+    orders = orders.map((o) => (o.id === orderId ? prev : o));
+    renderAll();
     showToast(err.message || "Falha ao aceitar corrida");
   }
 }

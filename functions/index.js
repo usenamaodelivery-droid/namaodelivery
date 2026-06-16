@@ -23,6 +23,22 @@ const BOOTSTRAP_EMAIL = process.env.ADMIN_BOOTSTRAP_EMAIL || "";
 const PLATFORM_FEE = 0.15; // 15% fica com a empresa, 85% repassa pro motorista
 const DRIVER_SHARE = 1 - PLATFORM_FEE;
 
+// Frete (entrega) do pedido, em centavos. Pedido de loja (Pedir NaMão) carrega
+// deliveryPriceCents separado do subtotal dos produtos — o motorista só ganha
+// sobre o frete, nunca sobre o produto (que é do lojista). Pedido ponto-a-ponto
+// não tem produto, então `price` já é o próprio frete.
+function orderFreteCents(o) {
+  if (o && o.deliveryPriceCents != null) return Math.round(Number(o.deliveryPriceCents));
+  return Math.round((Number(o && o.price) || 0) * 100);
+}
+
+// Ganho do motorista em centavos (85% do frete). Prefere o valor já gravado no
+// pedido (driverEarnings) quando existir, pra manter consistência histórica.
+function driverEarnCents(o) {
+  if (o && o.driverEarnings != null) return Math.round(Number(o.driverEarnings) * 100);
+  return Math.round(orderFreteCents(o) * DRIVER_SHARE);
+}
+
 // Mercado Pago — secrets armazenados via `firebase functions:secrets:set`
 const MP_ACCESS_TOKEN_SECRET = defineSecret("MERCADOPAGO_ACCESS_TOKEN");
 const MP_WEBHOOK_SECRET = defineSecret("MERCADOPAGO_WEBHOOK_SECRET");
@@ -79,14 +95,14 @@ async function notifyAvailableDrivers(orderData, orderId) {
   if (!tokens.length) return;
 
   const veh = orderData.veh || "Moto";
-  const price = typeof orderData.price === "number" ? orderData.price.toFixed(2) : "?";
+  const earn = (driverEarnCents(orderData) / 100).toFixed(2);
   const distance = typeof orderData.distanceKm === "number" ? orderData.distanceKm.toFixed(1) : "?";
 
   await admin.messaging().sendEachForMulticast({
     tokens,
     notification: {
       title: "Novo pedido disponível",
-      body: `${veh} · R$ ${price} · ${distance} km`,
+      body: `${veh} · Você ganha R$ ${earn} · ${distance} km`,
     },
     android: {
       priority: "high",
@@ -467,7 +483,7 @@ exports.requestDriverPayout = onCall({ secrets: [MP_ACCESS_TOKEN_SECRET] }, asyn
   deliveriesSnap.forEach((d) => {
     const o = d.data();
     if (o.payoutStatus === "completed" || o.payoutStatus === "pending") return;
-    const driverEarn = Math.round((Number(o.price) || 0) * DRIVER_SHARE * 100);
+    const driverEarn = driverEarnCents(o);
     if (driverEarn <= 0) return;
     eligible.push({ id: d.id, cents: driverEarn });
     totalCents += driverEarn;
@@ -645,7 +661,7 @@ exports.getDriverBalance = onCall(async (request) => {
 
   snap.forEach((d) => {
     const o = d.data();
-    const cents = Math.round((Number(o.price) || 0) * DRIVER_SHARE * 100);
+    const cents = driverEarnCents(o);
     totalEarnedCents += cents;
     deliveries.push({
       id: d.id,
