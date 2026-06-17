@@ -25,6 +25,83 @@
           navigator.serviceWorker.register('sw.js').catch(() => {});
         });
       }
+
+      // Guarda defensiva: os botões ENTRAR / Criar Conta chamam funções globais
+      // que só existem DEPOIS que js/app.js (módulo ES + imports do Firebase via
+      // CDN) termina de carregar. Em rede móvel ruim isso demora, e tocar antes
+      // fazia o botão "não fazer nada". Aqui damos um stub que avisa o usuário
+      // até o app.js sobrescrever com a função real (que seta window.__appReady).
+      window.__appReady = false;
+      window.handleAuth = function () {
+        alert('Carregando o aplicativo… aguarde 1 segundo e toque de novo.');
+      };
+
+      // Mensagem visível na própria tela (não some como o toast e não fica
+      // escondida atrás do teclado). Usada pra guiar o cadastro e mostrar erros.
+      window.showAuthHint = function (msg, isError) {
+        var el = document.getElementById('auth-hint');
+        if (!el) { alert(msg); return; }
+        el.textContent = msg;
+        el.classList.remove('hidden');
+        el.style.color = isError ? '#fca5a5' : '#86efac';
+      };
+
+      // Alterna entre ENTRAR e CRIAR CONTA. Ao tocar em "Criar Nova Conta" o
+      // entregador vê na hora a instrução + o botão vira CRIAR CONTA, então
+      // fica claro o que fazer (em vez de "não acontecer nada").
+      window.__authMode = 'login';
+      window.setAuthMode = function (mode) {
+        window.__authMode = mode;
+        var primary = document.getElementById('auth-primary-btn');
+        var toggle = document.getElementById('auth-toggle-mode');
+        var hint = document.getElementById('auth-hint');
+        if (mode === 'signup') {
+          if (primary) primary.textContent = 'CRIAR CONTA';
+          if (toggle) toggle.textContent = 'Já tenho conta — Entrar';
+          if (hint) {
+            hint.textContent = 'Digite seu e-mail e senha acima e toque em CRIAR CONTA.';
+            hint.style.color = '#E8B93A';
+            hint.classList.remove('hidden');
+          }
+          var em = document.getElementById('auth-email');
+          if (em && !em.value) em.focus();
+        } else {
+          if (primary) primary.textContent = 'ENTRAR';
+          if (toggle) toggle.textContent = 'Criar Nova Conta';
+          if (hint) hint.classList.add('hidden');
+        }
+      };
+
+      // Mostrar/ocultar a senha (não depende do Firebase).
+      window.togglePasswordVisibility = function () {
+        var inp = document.getElementById('auth-password');
+        var btn = document.getElementById('toggle-password');
+        if (!inp) return;
+        var show = inp.type === 'password';
+        inp.type = show ? 'text' : 'password';
+        if (btn) {
+          btn.setAttribute('aria-label', show ? 'Ocultar senha' : 'Mostrar senha');
+          btn.innerHTML = show
+            ? '<i class="fa-solid fa-eye-slash"></i>'
+            : '<i class="fa-solid fa-eye"></i>';
+        }
+      };
+
+      // Quando o teclado abre no celular, ele tampava os campos de e-mail/senha.
+      // Ao focar um campo, rolamos ele pro centro da tela (com um pequeno delay
+      // pra esperar o teclado subir). A tela de auth agora é rolável.
+      window.addEventListener('DOMContentLoaded', function () {
+        ['auth-email', 'auth-password'].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (!el) return;
+          el.addEventListener('focus', function () {
+            setTimeout(function () {
+              try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+              catch (e) { el.scrollIntoView(); }
+            }, 300);
+          });
+        });
+      });
     </script>
 
     <script src="https://cdn.tailwindcss.com"></script>
@@ -78,7 +155,7 @@
         </div>
 
         <!-- TELA DE AUTENTICAÇÃO -->
-        <div id="auth-screen" class="absolute inset-0 hidden z-[2000] flex flex-col p-8 fade-in" style="background: linear-gradient(135deg, #1B304F 0%, #0F1F3A 100%);">
+        <div id="auth-screen" class="absolute inset-0 hidden z-[2000] flex flex-col p-8 overflow-y-auto no-scrollbar fade-in" style="background: linear-gradient(135deg, #1B304F 0%, #0F1F3A 100%);">
             <div class="flex-1 flex flex-col justify-center items-center text-center">
                 <img src="icons/namao-icon.png" class="w-24 h-24 rounded-3xl mb-6 shadow-2xl border-2 border-accent/40" alt="NaMão logo" onerror="this.onerror=null; this.src='https://via.placeholder.com/96/1B304F/E8B93A?text=N'">
                 <h1 class="text-4xl font-black text-white tracking-tight"><span class="text-gray-200 font-light">Delivery</span> <span class="text-accent">Na</span>Mão</h1>
@@ -86,10 +163,14 @@
                 <p class="text-accent/90 text-xs font-bold mb-10 max-w-xs">Aceite corridas, ganhe 85% e receba via PIX. Cadastro aprovado em 2 minutos.</p>
 
                 <div class="w-full">
-                    <input type="email" id="auth-email" placeholder="E-mail" class="w-full bg-white/10 border-2 border-white/20 rounded-xl p-4 mb-3 text-white placeholder-gray-300 outline-none focus:ring-2 focus:ring-accent text-base font-semibold">
-                    <input type="password" id="auth-password" placeholder="Senha" class="w-full bg-white/10 border-2 border-white/20 rounded-xl p-4 mb-5 text-white placeholder-gray-300 outline-none focus:ring-2 focus:ring-accent text-base font-semibold">
-                    <button onclick="handleAuth('login')" class="btn-accent w-full uppercase tracking-widest text-lg mb-4">ENTRAR</button>
-                    <button onclick="handleAuth('signup')" class="text-accent text-sm font-extrabold uppercase tracking-widest hover:opacity-80">Criar Nova Conta</button>
+                    <p id="auth-hint" class="hidden text-sm font-bold mb-4 max-w-xs mx-auto"></p>
+                    <input type="email" id="auth-email" placeholder="E-mail" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="email" class="w-full bg-white/10 border-2 border-white/20 rounded-xl p-4 mb-3 text-white placeholder-gray-300 outline-none focus:ring-2 focus:ring-accent text-base font-semibold">
+                    <div class="relative mb-5">
+                        <input type="password" id="auth-password" placeholder="Senha" autocapitalize="none" autocorrect="off" spellcheck="false" class="w-full bg-white/10 border-2 border-white/20 rounded-xl p-4 pr-12 text-white placeholder-gray-300 outline-none focus:ring-2 focus:ring-accent text-base font-semibold">
+                        <button type="button" id="toggle-password" onclick="togglePasswordVisibility()" aria-label="Mostrar senha" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-white p-2"><i class="fa-solid fa-eye"></i></button>
+                    </div>
+                    <button id="auth-primary-btn" onclick="handleAuth(window.__authMode || 'login')" class="btn-accent w-full uppercase tracking-widest text-lg mb-4 disabled:opacity-60">ENTRAR</button>
+                    <button id="auth-toggle-mode" onclick="setAuthMode((window.__authMode === 'signup') ? 'login' : 'signup')" class="text-accent text-sm font-extrabold uppercase tracking-widest hover:opacity-80">Criar Nova Conta</button>
                 </div>
             </div>
         </div>

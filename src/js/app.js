@@ -192,6 +192,13 @@ function applyDriverProfile() {
     ctaDriver?.classList.remove("hidden");
     if (displayName) displayName.innerText = currentUser?.email?.split("@")[0] || "Entregador";
     if (statusLabel) statusLabel.innerHTML = `Status: <span class="font-black">Aguardando cadastro</span>`;
+    // Acabou de criar a conta e ainda não tem perfil → leva direto pro
+    // formulário de cadastro (CNH/selfie), pra não cair numa home vazia e
+    // parecer que o "Criar Conta" não fez nada.
+    if (window.__justSignedUp) {
+      window.__justSignedUp = false;
+      switchView("driver-registration");
+    }
     return;
   }
   ctaDriver?.classList.add("hidden");
@@ -1128,3 +1135,6 @@ Object.assign(window, {
   requestAppPermission,
   refreshPermissionStatuses,
 });
+
+// Sinaliza que os handlers reais já substituíram os stubs do index.html.
+window.__appReady = true;
