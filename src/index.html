@@ -35,6 +35,43 @@
       window.handleAuth = function () {
         alert('Carregando o aplicativo… aguarde 1 segundo e toque de novo.');
       };
+
+      // Mensagem visível na própria tela (não some como o toast e não fica
+      // escondida atrás do teclado). Usada pra guiar o cadastro e mostrar erros.
+      window.showAuthHint = function (msg, isError) {
+        var el = document.getElementById('auth-hint');
+        if (!el) { alert(msg); return; }
+        el.textContent = msg;
+        el.classList.remove('hidden');
+        el.style.color = isError ? '#fca5a5' : '#86efac';
+      };
+
+      // Alterna entre ENTRAR e CRIAR CONTA. Ao tocar em "Criar Nova Conta" o
+      // entregador vê na hora a instrução + o botão vira CRIAR CONTA, então
+      // fica claro o que fazer (em vez de "não acontecer nada").
+      window.__authMode = 'login';
+      window.setAuthMode = function (mode) {
+        window.__authMode = mode;
+        var primary = document.getElementById('auth-primary-btn');
+        var toggle = document.getElementById('auth-toggle-mode');
+        var hint = document.getElementById('auth-hint');
+        if (mode === 'signup') {
+          if (primary) primary.textContent = 'CRIAR CONTA';
+          if (toggle) toggle.textContent = 'Já tenho conta — Entrar';
+          if (hint) {
+            hint.textContent = 'Digite seu e-mail e senha acima e toque em CRIAR CONTA.';
+            hint.style.color = '#E8B93A';
+            hint.classList.remove('hidden');
+          }
+          var em = document.getElementById('auth-email');
+          if (em && !em.value) em.focus();
+        } else {
+          if (primary) primary.textContent = 'ENTRAR';
+          if (toggle) toggle.textContent = 'Criar Nova Conta';
+          if (hint) hint.classList.add('hidden');
+        }
+      };
+
       // Mostrar/ocultar a senha (não depende do Firebase).
       window.togglePasswordVisibility = function () {
         var inp = document.getElementById('auth-password');
@@ -126,13 +163,14 @@
                 <p class="text-accent/90 text-xs font-bold mb-10 max-w-xs">Aceite corridas, ganhe 85% e receba via PIX. Cadastro aprovado em 2 minutos.</p>
 
                 <div class="w-full">
+                    <p id="auth-hint" class="hidden text-sm font-bold mb-4 max-w-xs mx-auto"></p>
                     <input type="email" id="auth-email" placeholder="E-mail" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="email" class="w-full bg-white/10 border-2 border-white/20 rounded-xl p-4 mb-3 text-white placeholder-gray-300 outline-none focus:ring-2 focus:ring-accent text-base font-semibold">
                     <div class="relative mb-5">
                         <input type="password" id="auth-password" placeholder="Senha" autocapitalize="none" autocorrect="off" spellcheck="false" class="w-full bg-white/10 border-2 border-white/20 rounded-xl p-4 pr-12 text-white placeholder-gray-300 outline-none focus:ring-2 focus:ring-accent text-base font-semibold">
                         <button type="button" id="toggle-password" onclick="togglePasswordVisibility()" aria-label="Mostrar senha" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-white p-2"><i class="fa-solid fa-eye"></i></button>
                     </div>
-                    <button id="auth-login-btn" onclick="handleAuth('login')" class="btn-accent w-full uppercase tracking-widest text-lg mb-4">ENTRAR</button>
-                    <button id="auth-signup-btn" onclick="handleAuth('signup')" class="text-accent text-sm font-extrabold uppercase tracking-widest hover:opacity-80 disabled:opacity-50">Criar Nova Conta</button>
+                    <button id="auth-primary-btn" onclick="handleAuth(window.__authMode || 'login')" class="btn-accent w-full uppercase tracking-widest text-lg mb-4 disabled:opacity-60">ENTRAR</button>
+                    <button id="auth-toggle-mode" onclick="setAuthMode((window.__authMode === 'signup') ? 'login' : 'signup')" class="text-accent text-sm font-extrabold uppercase tracking-widest hover:opacity-80">Criar Nova Conta</button>
                 </div>
             </div>
         </div>

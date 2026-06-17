@@ -16,29 +16,35 @@ export function onAuth(cb) {
 
 let authBusy = false;
 
+function hint(msg, isError) {
+  if (typeof window.showAuthHint === "function") window.showAuthHint(msg, isError);
+  else showToast(msg);
+}
+
 export async function handleAuth(type) {
   if (authBusy) return;
   const email = document.getElementById("auth-email").value.trim();
   const password = document.getElementById("auth-password").value;
   if (!email || !password) {
-    showToast("Preencha e-mail e senha");
+    hint(
+      type === "signup"
+        ? "Digite seu e-mail e senha acima e toque em CRIAR CONTA."
+        : "Digite seu e-mail e senha para entrar.",
+      true
+    );
     return;
   }
   if (type === "signup" && password.length < 6) {
-    showToast("A senha precisa ter pelo menos 6 caracteres");
+    hint("A senha precisa ter pelo menos 6 caracteres.", true);
     return;
   }
 
-  const loginBtn = document.getElementById("auth-login-btn");
-  const signupBtn = document.getElementById("auth-signup-btn");
-  const activeBtn = type === "login" ? loginBtn : signupBtn;
-  const originalText = activeBtn ? activeBtn.innerHTML : "";
+  const primaryBtn = document.getElementById("auth-primary-btn");
+  const originalText = primaryBtn ? primaryBtn.innerHTML : "";
   authBusy = true;
-  if (loginBtn) loginBtn.disabled = true;
-  if (signupBtn) signupBtn.disabled = true;
-  if (activeBtn) {
-    activeBtn.innerHTML =
-      type === "login" ? "Entrando…" : "Criando sua conta…";
+  if (primaryBtn) {
+    primaryBtn.disabled = true;
+    primaryBtn.innerHTML = type === "login" ? "Entrando…" : "Criando sua conta…";
   }
 
   try {
@@ -49,15 +55,16 @@ export async function handleAuth(type) {
       // Sinaliza pro fluxo de auth (app.js) levar o novo entregador direto
       // pro formulário de cadastro (CNH/selfie), em vez de cair numa home vazia.
       window.__justSignedUp = true;
-      showToast("Conta criada! Agora envie seus documentos.");
+      hint("Conta criada! Agora envie seus documentos.", false);
     }
   } catch (err) {
-    showToast(mapAuthError(err.code) || err.message || "Não foi possível autenticar");
+    hint(mapAuthError(err.code) || err.message || "Não foi possível autenticar", true);
   } finally {
     authBusy = false;
-    if (loginBtn) loginBtn.disabled = false;
-    if (signupBtn) signupBtn.disabled = false;
-    if (activeBtn) activeBtn.innerHTML = originalText;
+    if (primaryBtn) {
+      primaryBtn.disabled = false;
+      primaryBtn.innerHTML = originalText;
+    }
   }
 }
 
