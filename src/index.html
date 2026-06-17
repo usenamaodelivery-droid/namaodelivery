@@ -35,6 +35,20 @@
       window.handleAuth = function () {
         alert('Carregando o aplicativo… aguarde 1 segundo e toque de novo.');
       };
+      // Mostrar/ocultar a senha (não depende do Firebase).
+      window.togglePasswordVisibility = function () {
+        var inp = document.getElementById('auth-password');
+        var btn = document.getElementById('toggle-password');
+        if (!inp) return;
+        var show = inp.type === 'password';
+        inp.type = show ? 'text' : 'password';
+        if (btn) {
+          btn.setAttribute('aria-label', show ? 'Ocultar senha' : 'Mostrar senha');
+          btn.innerHTML = show
+            ? '<i class="fa-solid fa-eye-slash"></i>'
+            : '<i class="fa-solid fa-eye"></i>';
+        }
+      };
 
       // Quando o teclado abre no celular, ele tampava os campos de e-mail/senha.
       // Ao focar um campo, rolamos ele pro centro da tela (com um pequeno delay
@@ -113,7 +127,10 @@
 
                 <div class="w-full">
                     <input type="email" id="auth-email" placeholder="E-mail" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="email" class="w-full bg-white/10 border-2 border-white/20 rounded-xl p-4 mb-3 text-white placeholder-gray-300 outline-none focus:ring-2 focus:ring-accent text-base font-semibold">
-                    <input type="password" id="auth-password" placeholder="Senha" autocapitalize="none" autocorrect="off" spellcheck="false" class="w-full bg-white/10 border-2 border-white/20 rounded-xl p-4 mb-5 text-white placeholder-gray-300 outline-none focus:ring-2 focus:ring-accent text-base font-semibold">
+                    <div class="relative mb-5">
+                        <input type="password" id="auth-password" placeholder="Senha" autocapitalize="none" autocorrect="off" spellcheck="false" class="w-full bg-white/10 border-2 border-white/20 rounded-xl p-4 pr-12 text-white placeholder-gray-300 outline-none focus:ring-2 focus:ring-accent text-base font-semibold">
+                        <button type="button" id="toggle-password" onclick="togglePasswordVisibility()" aria-label="Mostrar senha" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-white p-2"><i class="fa-solid fa-eye"></i></button>
+                    </div>
                     <button id="auth-login-btn" onclick="handleAuth('login')" class="btn-accent w-full uppercase tracking-widest text-lg mb-4">ENTRAR</button>
                     <button id="auth-signup-btn" onclick="handleAuth('signup')" class="text-accent text-sm font-extrabold uppercase tracking-widest hover:opacity-80 disabled:opacity-50">Criar Nova Conta</button>
                 </div>
