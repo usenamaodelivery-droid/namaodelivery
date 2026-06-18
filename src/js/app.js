@@ -27,6 +27,7 @@ import {
   registerDriver,
   saveDriverFcmToken,
   setNotifyOnNewOrder,
+  updateDriverPresence,
 } from "./driverProfile.js";
 import {
   openPOD,
@@ -102,6 +103,7 @@ onAuth(async (user) => {
     if (unsubBroadcasts) { unsubBroadcasts(); unsubBroadcasts = null; }
     currentUser = null;
     driverProfile = null;
+    updatePresenceController();
     return;
   }
   currentUser = user;
@@ -225,6 +227,9 @@ function applyDriverProfile() {
   } else {
     overlay?.classList.add("hidden");
   }
+
+  // (Re)avalia o heartbeat de presença quando o status do perfil muda.
+  updatePresenceController();
 }
 
 // --- Render ---
@@ -459,7 +464,39 @@ function toggleDriverOnlineImpl() {
   try { localStorage.setItem("namao_driver_online", String(driverOnline)); } catch {}
   applyOnlineStatusUI();
   renderDriverMural();
+  updatePresenceController();
   showToast(driverOnline ? "Você está ONLINE — recebendo corridas." : "Você está OFFLINE — não recebe novas corridas.");
+}
+
+// --- Presença/localização do motorista (pra dispatch por proximidade) ---
+// Mantém lastLat/lastLng/lastLocationAt no perfil enquanto o motorista está
+// ONLINE e aprovado, mesmo sem corrida ativa. A Cloud Function usa isso pra
+// só notificar quem está dentro do raio do ponto de coleta.
+let presenceTimer = null;
+let presenceActive = false;
+
+function sendPresenceOnce() {
+  if (!currentUser || !navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    (p) => {
+      updateDriverPresence(currentUser.uid, p.coords.latitude, p.coords.longitude)
+        .catch((err) => console.warn("[presence] update failed:", err));
+    },
+    (err) => console.warn("[presence] geolocation error:", err?.message),
+    { enableHighAccuracy: false, maximumAge: 60_000, timeout: 15_000 },
+  );
+}
+
+function updatePresenceController() {
+  const shouldRun = !!currentUser && driverProfile?.status === "approved" && driverOnline;
+  if (shouldRun && !presenceActive) {
+    presenceActive = true;
+    sendPresenceOnce();
+    presenceTimer = setInterval(sendPresenceOnce, 60_000);
+  } else if (!shouldRun && presenceActive) {
+    presenceActive = false;
+    if (presenceTimer) { clearInterval(presenceTimer); presenceTimer = null; }
+  }
 }
 
 function applyDriverAvatar(profile) {

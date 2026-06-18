@@ -103,26 +103,75 @@ exports.setAdminClaim = onCall(async (request) => {
   return { ok: true, targetUid, admin: Boolean(makeAdmin) };
 });
 
+// --- Dispatch por proximidade ---------------------------------------------
+// O pedido NÃO vai pra todo motorista do mundo. Notifica primeiro quem está
+// mais perto do ponto de coleta; se ninguém pega, o raio cresce a cada ciclo
+// (re-toca) até o máximo. Motorista só recebe se estiver a no máx. 30 km.
+const DISPATCH_FIRST_RADIUS_KM = 8; // primeiro toque: só os bem perto
+const DISPATCH_STEP_KM = 7; // cresce o raio a cada re-toque
+const DISPATCH_MAX_RADIUS_KM = 30; // teto absoluto (regra do dono)
+const DISPATCH_RERING_MS = 2 * 60 * 1000; // re-toca a cada 2 min se ninguém pegar
+const DISPATCH_GIVEUP_MS = 30 * 60 * 1000; // para de re-tocar depois de 30 min
+const DRIVER_LOCATION_FRESH_MS = 30 * 60 * 1000; // só conta quem mandou GPS nos últimos 30 min
+
+function toRad(d) { return (d * Math.PI) / 180; }
+function haversineKm(aLat, aLng, bLat, bLng) {
+  const R = 6371;
+  const dLat = toRad(bLat - aLat);
+  const dLng = toRad(bLng - aLng);
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
+}
+
+// Coordenada do ponto de COLETA do pedido (loja / origem).
+function pickupCoordsOf(o) {
+  if (o && o.originCoords && typeof o.originCoords.lat === "number") {
+    return { lat: o.originCoords.lat, lng: o.originCoords.lng };
+  }
+  if (o && typeof o.storeLat === "number" && typeof o.storeLng === "number") {
+    return { lat: o.storeLat, lng: o.storeLng };
+  }
+  return null;
+}
+
 /**
- * Dispara FCM pra todos os drivers aprovados quando um pedido entra em
- * `pending` (já passou pelo PIX). Idempotente: só dispara na transição.
+ * Notifica os motoristas aprovados, ONLINE e DENTRO de `radiusKm` do ponto de
+ * coleta. Retorna quantos foram notificados. Se o pedido não tiver coordenada
+ * de coleta (dado legado), cai no fallback de notificar todos (pra nunca deixar
+ * de despachar por falta de dado).
  */
-async function notifyAvailableDrivers(orderData, orderId) {
-  // Pega todos approved e filtra na CPU — `!=` no Firestore exclui docs
-  // sem o campo, e queremos default=true.
+async function dispatchToDrivers(orderData, orderId, radiusKm) {
+  const pickup = pickupCoordsOf(orderData);
   const profilesSnap = await admin
     .firestore()
     .collectionGroup("profile")
     .where("status", "==", "approved")
     .get();
 
+  const now = Date.now();
   const tokens = [];
   profilesSnap.forEach((doc) => {
+    if (doc.id !== "driverInfo") return;
     if (doc.get("notifyOnNewOrder") === false) return;
     const t = doc.get("fcmToken");
-    if (typeof t === "string" && t.length > 10) tokens.push(t);
+    if (typeof t !== "string" || t.length <= 10) return;
+
+    if (pickup) {
+      const lat = doc.get("lastLat");
+      const lng = doc.get("lastLng");
+      const at = doc.get("lastLocationAt");
+      // Sem localização recente => não dá pra garantir proximidade => não envia.
+      if (typeof lat !== "number" || typeof lng !== "number") return;
+      if (typeof at !== "number" || now - at > DRIVER_LOCATION_FRESH_MS) return;
+      const dist = haversineKm(pickup.lat, pickup.lng, lat, lng);
+      if (dist > radiusKm) return;
+    }
+    tokens.push(t);
   });
-  if (!tokens.length) return;
+
+  if (!tokens.length) return 0;
 
   const veh = orderData.veh || "Moto";
   const earn = (driverEarnCents(orderData) / 100).toFixed(2);
@@ -148,6 +197,30 @@ async function notifyAvailableDrivers(orderData, orderId) {
       orderId: String(orderId),
     },
   });
+  return tokens.length;
+}
+
+/**
+ * Primeiro toque de um pedido novo em `pending`. Notifica só o raio inicial e
+ * grava o estado de dispatch no pedido pro re-toque (scheduler) continuar.
+ */
+async function notifyAvailableDrivers(orderData, orderId) {
+  const radius = DISPATCH_FIRST_RADIUS_KM;
+  const sent = await dispatchToDrivers(orderData, orderId, radius);
+  try {
+    await admin
+      .firestore()
+      .doc(`artifacts/${APP_ID}/public/data/orders/${orderId}`)
+      .update({
+        dispatchRadiusKm: radius,
+        dispatchStartedAt: Date.now(),
+        lastDispatchAt: Date.now(),
+        dispatchRounds: 1,
+      });
+  } catch (err) {
+    console.warn(`[dispatch] falha ao gravar estado do pedido ${orderId}:`, err);
+  }
+  console.log(`[dispatch] pedido ${orderId}: 1º toque raio ${radius}km → ${sent} motorista(s)`);
 }
 
 exports.onOrderCreated = onDocumentCreated(
@@ -159,6 +232,40 @@ exports.onOrderCreated = onDocumentCreated(
     await notifyAvailableDrivers(data, event.params.orderId);
   }
 );
+
+/**
+ * Re-toque: a cada minuto varre os pedidos ainda `pending` (ninguém pegou) e,
+ * passados ~2 min do último toque, aumenta o raio e re-notifica (toca de novo).
+ * Cresce até 30 km e desiste depois de 30 min. É isso que faz "tocou, ninguém
+ * pegou, passa um tempo toca de novo" + "primeiro os mais perto, depois longe".
+ */
+exports.redispatchPendingOrders = onSchedule("every 1 minutes", async () => {
+  const db = admin.firestore();
+  const snap = await db
+    .collection(`artifacts/${APP_ID}/public/data/orders`)
+    .where("status", "==", "pending")
+    .get();
+
+  const now = Date.now();
+  for (const docSnap of snap.docs) {
+    const o = docSnap.data();
+    if (o.driverId) continue; // já tem motorista
+    const startedAt = o.dispatchStartedAt || o.pendingAt || o.createdAt || now;
+    if (now - startedAt > DISPATCH_GIVEUP_MS) continue; // já passou da janela
+    const lastAt = o.lastDispatchAt || 0;
+    if (now - lastAt < DISPATCH_RERING_MS) continue; // ainda não é hora de re-tocar
+
+    const prevRadius = typeof o.dispatchRadiusKm === "number" ? o.dispatchRadiusKm : DISPATCH_FIRST_RADIUS_KM;
+    const radius = Math.min(DISPATCH_MAX_RADIUS_KM, prevRadius + DISPATCH_STEP_KM);
+    const sent = await dispatchToDrivers(o, docSnap.id, radius);
+    await docSnap.ref.update({
+      dispatchRadiusKm: radius,
+      lastDispatchAt: now,
+      dispatchRounds: (o.dispatchRounds || 1) + 1,
+    });
+    console.log(`[dispatch] re-toque pedido ${docSnap.id}: raio ${radius}km → ${sent} motorista(s)`);
+  }
+});
 
 exports.onOrderStatusChanged = onDocumentUpdated(
   `artifacts/${APP_ID}/public/data/orders/{orderId}`,
@@ -1067,6 +1174,7 @@ exports.onMerchantAccepted = onDocumentUpdated(
     if (!before || !after) return;
     if (before.status === "awaiting_merchant_acceptance" && after.status === "pending") {
       console.log(`[merchant] pedido ${event.params.orderId} aceito → dispatch`);
+      await notifyAvailableDrivers(after, event.params.orderId);
     }
   }
 );

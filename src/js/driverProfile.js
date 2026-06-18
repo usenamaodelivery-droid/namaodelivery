@@ -29,6 +29,18 @@ export async function saveDriverFcmToken(uid, token) {
   await setDoc(ref, { fcmToken: token, fcmUpdatedAt: Date.now() }, { merge: true });
 }
 
+/**
+ * Salva a última localização conhecida do motorista no perfil. Usado pra
+ * filtrar os pedidos por proximidade (a Cloud Function só notifica motoristas
+ * dentro do raio do ponto de coleta). Atualiza mesmo SEM corrida ativa, pra
+ * que o motorista online apareça como "perto" do pedido novo.
+ */
+export async function updateDriverPresence(uid, lat, lng) {
+  if (!uid || typeof lat !== "number" || typeof lng !== "number") return;
+  const ref = doc(db, "artifacts", APP_ID, "users", uid, "profile", "driverInfo");
+  await setDoc(ref, { lastLat: lat, lastLng: lng, lastLocationAt: Date.now() }, { merge: true });
+}
+
 /** Liga/desliga notificações de novo pedido. */
 export async function setNotifyOnNewOrder(uid, enabled) {
   if (!uid) return;
