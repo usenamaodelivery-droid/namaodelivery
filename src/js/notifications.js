@@ -116,9 +116,39 @@ export function playMessageSound() {
   tryVibrate([80, 50, 80]);
 }
 
+const ORDER_CHANNEL_ID = "namao_orders_v2";
+const MESSAGE_CHANNEL_ID = "namao_messages_v2";
+
 let fcmListenersBound = false;
 let fcmTokenCb = null;
 let broadcastCb = null;
+let localNotifId = 4000;
+
+/**
+ * Mostra uma notificação NA BARRA de status mesmo com o app ABERTO (foreground).
+ * O Android só monta a notificação automática quando o app está em background;
+ * em foreground o push chega via `pushNotificationReceived` e nada aparece na
+ * barra — só tocava o som. Aqui usamos LocalNotifications pra montar na barra.
+ */
+async function showTrayNotification({ title, body, channelId }) {
+  try {
+    const LN = window.Capacitor?.Plugins?.LocalNotifications;
+    if (!LN) return; // Browser/PWA: sem plugin nativo, ignora (Web Notification cobre).
+    localNotifId = (localNotifId + 1) % 2000000000;
+    await LN.schedule({
+      notifications: [
+        {
+          id: localNotifId,
+          title: title || "NaMão",
+          body: body || "",
+          channelId: channelId || MESSAGE_CHANNEL_ID,
+        },
+      ],
+    });
+  } catch (err) {
+    console.warn("[localnotif] schedule failed:", err);
+  }
+}
 
 export function onFcmToken(cb) { fcmTokenCb = cb; }
 export function onBroadcastPush(cb) { broadcastCb = cb; }
@@ -143,11 +173,21 @@ function bindFcmListeners() {
     const type = notif?.data?.type;
     if (type === "new_message") {
       playMessageSound();
+      showTrayNotification({
+        title: notif?.title || notif?.data?.title || "Nova mensagem",
+        body: notif?.body || notif?.data?.body || "Você recebeu uma mensagem",
+        channelId: MESSAGE_CHANNEL_ID,
+      });
     } else if (type === "broadcast") {
       // Comunicado: NÃO toca sirene de pedido. Mostra modal in-app + bipe curto.
       try {
         playMessageSound();
       } catch { /* ignore */ }
+      showTrayNotification({
+        title: notif?.title || notif?.data?.title || "Comunicado NaMão",
+        body: notif?.body || notif?.data?.body || "",
+        channelId: MESSAGE_CHANNEL_ID,
+      });
       if (broadcastCb) {
         try {
           broadcastCb({
@@ -159,6 +199,11 @@ function bindFcmListeners() {
       }
     } else {
       // Default: tratar como novo pedido
+      showTrayNotification({
+        title: notif?.title || "Novo pedido disponível",
+        body: notif?.body || notif?.data?.body || "Abra o app pra aceitar",
+        channelId: ORDER_CHANNEL_ID,
+      });
       notifyNewOrder({
         id: notif?.data?.orderId,
         priceCents: notif?.data?.price ? Math.round(parseFloat(notif.data.price) * 100) : undefined,
@@ -184,6 +229,15 @@ export async function requestNotificationPermission() {
     if (perm.receive === "granted") {
       await PN.register();
     }
+    // Garante permissão de LocalNotifications (mesma POST_NOTIFICATIONS no Android 13+)
+    // pra conseguir montar a notificação na barra em foreground.
+    try {
+      const LN = Caps?.Plugins?.LocalNotifications;
+      if (LN) {
+        const lp = await LN.checkPermissions();
+        if (lp.display !== "granted") await LN.requestPermissions();
+      }
+    } catch { /* ignore */ }
   } catch (err) { console.warn("[fcm] requestPermission failed:", err); }
 }
 
