@@ -148,11 +148,11 @@ function statusBadge(m) {
   return `<span class="badge badge-green">Ativa</span>`;
 }
 
-// Comissão sobre produtos (subtotal do cardápio): 5% para lojas Pedir-only,
+// Comissão sobre produtos (subtotal do cardápio): 15% para lojas Pedir-only,
 // 0% para lojas linkadas à NaMão social. PLATFORM_FEE (15%) é a margem sobre
 // frete e NUNCA debita o lojista — é o spread entre o que o cliente paga e os
 // 85% que vai pro motorista. Não confundir.
-const MERCHANT_PRODUCT_COMMISSION = 0.05;
+const MERCHANT_PRODUCT_COMMISSION = 0.15;
 
 function commissionBadge(m) {
   if (m.commissionFree) return `<span class="badge badge-blue">NaMão · 0%</span>`;
@@ -407,7 +407,7 @@ async function openDetail(merchantId) {
         } else if (act === "freecomm" || act === "charge") {
           const newVal = act === "freecomm";
           const ok = await confirmDialog(newVal
-            ? "Isentar comissão? Loja não paga os 5% sobre os produtos."
+            ? `Isentar comissão? Loja não paga os ${(MERCHANT_PRODUCT_COMMISSION * 100).toFixed(0)}% sobre os produtos.`
             : `Cobrar comissão de ${(MERCHANT_PRODUCT_COMMISSION * 100).toFixed(0)}% sobre produtos novamente?`);
           if (!ok) return;
           await setCommissionFree(merchantId, newVal);

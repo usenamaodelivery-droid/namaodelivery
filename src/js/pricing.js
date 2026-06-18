@@ -1,9 +1,10 @@
 // Regras de repasse — fonte única da verdade pra "quanto cada um recebe".
 //
 // Modelo:
-//   - Lojista recebe o produto menos 5% de comissão (cobrado no Pedir NaMão).
+//   - Lojista recebe o produto menos a comissão (0% se ativo no NaMão social,
+//     15% se só no NaMão Delivery), cobrada no Pedir NaMão.
 //   - Motorista recebe 85% do FRETE (nunca do produto).
-//   - NaMão fica com 15% do frete + 5% do produto.
+//   - NaMão fica com 15% do frete + a comissão do produto (0% ou 15%).
 //
 // O ponto crítico: pedido de loja (Pedir NaMão) tem `deliveryPriceCents`
 // (frete) separado do subtotal dos produtos. O motorista só ganha sobre o
@@ -36,10 +37,10 @@ export function freteFeeBRL(o) {
   return round2(orderFreteBRL(o) * PLATFORM_FEE);
 }
 
-/** Comissão da NaMão sobre o produto (já calculada no pedido, ou 5% fallback). */
+/** Comissão da NaMão sobre o produto (já calculada no pedido, ou 15% fallback). */
 export function produtoCommissionBRL(o) {
   if (o && o.commissionCents != null) return Number(o.commissionCents) / 100;
-  return round2(orderProdutosBRL(o) * 0.05);
+  return round2(orderProdutosBRL(o) * 0.15);
 }
 
 /** Receita total da NaMão no pedido: margem do frete + comissão do produto. */

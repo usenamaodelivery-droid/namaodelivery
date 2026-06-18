@@ -53,6 +53,36 @@ function getMpToken() {
   return MP_ACCESS_TOKEN_SECRET.value() || process.env.MERCADOPAGO_ACCESS_TOKEN || "";
 }
 
+// Token Mercado Pago do LOJISTA (split de pagamento). Pedido de loja é criado
+// com o token do próprio lojista (ele é o collector), então o estorno também
+// precisa ser feito com o token dele — o token da plataforma não consegue
+// estornar um pagamento de outra conta. Os tokens ficam num caminho privado
+// gravado pelo PWA (namao-pwa) no mesmo projeto Firestore.
+async function getSellerMpToken(storeId) {
+  if (!storeId) return null;
+  try {
+    const snap = await admin
+      .firestore()
+      .doc(`artifacts/${APP_ID}/private/data/merchant_mp/${storeId}`)
+      .get();
+    if (!snap.exists) return null;
+    const d = snap.data() || {};
+    return d.accessToken ? String(d.accessToken) : null;
+  } catch (e) {
+    console.error("[refund] erro lendo token do lojista:", e);
+    return null;
+  }
+}
+
+// Escolhe o token certo pro estorno de um pedido: lojista (split) ou plataforma.
+async function refundTokenForOrder(orderData) {
+  if (orderData && orderData.splitApplied) {
+    const sellerToken = await getSellerMpToken(orderData.storeId);
+    if (sellerToken) return sellerToken;
+  }
+  return getMpToken();
+}
+
 exports.setAdminClaim = onCall(async (request) => {
   const { targetUid, admin: makeAdmin } = request.data || {};
   if (!targetUid) throw new HttpsError("invalid-argument", "targetUid obrigatório");
@@ -405,17 +435,20 @@ exports.refundOrder = onCall({ secrets: [MP_ACCESS_TOKEN_SECRET] }, async (reque
   if (!["waiting_confirmation", "pending"].includes(order.status)) {
     throw new HttpsError("failed-precondition", "Pedido já foi aceito ou finalizado — não dá pra estornar");
   }
-  if (!order.paymentId) {
+  const paymentId = order.mpPaymentId || order.paymentId;
+  if (!paymentId) {
     // Pedido não foi pago ainda — só cancela
     await orderRef.update({ status: "cancelled", cancelledAt: Date.now(), cancelReason: "client_cancelled" });
     return { ok: true, refunded: false };
   }
 
-  // Estorno PIX é total (MP devolve via PIX pra mesma chave que pagou)
-  const r = await fetch(`https://api.mercadopago.com/v1/payments/${order.paymentId}/refunds`, {
+  // Estorno PIX é total (MP devolve via PIX pra mesma chave que pagou). Split
+  // (pedido de loja) precisa do token do lojista; senão, plataforma.
+  const refundToken = await refundTokenForOrder(order);
+  const r = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}/refunds`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${getMpToken()}`,
+      Authorization: `Bearer ${refundToken}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({}),
@@ -722,14 +755,19 @@ exports.getDriverBalance = onCall(async (request) => {
  * Executa o estorno PIX no Mercado Pago e atualiza o pedido para `refunded`.
  * Idempotente: se já existe refundId no doc, retorna sem chamar MP.
  */
+const REFUND_MAX_ATTEMPTS = 8;
+
 async function executeMpRefund(orderRef, orderData, reason) {
   // Idempotência — já estornado?
   if (orderData.refundId || orderData.status === "refunded") {
     await orderRef.update({ refundPending: false });
     return { skipped: true };
   }
-  // Sem paymentId — pedido nunca foi pago, só limpa a flag.
-  if (!orderData.paymentId) {
+  // O PWA grava o id do pagamento como `mpPaymentId`; o fluxo legado usa
+  // `paymentId`. Aceita os dois.
+  const paymentId = orderData.mpPaymentId || orderData.paymentId;
+  // Sem id de pagamento — pedido nunca foi pago, só limpa a flag.
+  if (!paymentId) {
     await orderRef.update({
       refundPending: false,
       refundedAt: Date.now(),
@@ -738,7 +776,8 @@ async function executeMpRefund(orderRef, orderData, reason) {
     return { skipped: true };
   }
 
-  const token = getMpToken();
+  // Split (pedido de loja) precisa do token do lojista; senão, plataforma.
+  const token = await refundTokenForOrder(orderData);
   if (!token) {
     console.error("[refund] MP token ausente — não vou chamar API");
     return { error: "no_mp_token" };
@@ -746,7 +785,7 @@ async function executeMpRefund(orderRef, orderData, reason) {
 
   const idempotencyKey = `refund-${orderRef.id}-${reason}`;
   const r = await fetch(
-    `https://api.mercadopago.com/v1/payments/${orderData.paymentId}/refunds`,
+    `https://api.mercadopago.com/v1/payments/${paymentId}/refunds`,
     {
       method: "POST",
       headers: {
@@ -763,11 +802,19 @@ async function executeMpRefund(orderRef, orderData, reason) {
       r.status,
       result
     );
+    // Mantém `refundPending: true` pra o sweep tentar de novo (ex.: saldo do
+    // lojista ainda indisponível). Desiste depois de N tentativas e marca o
+    // pedido pra estorno manual.
+    const attempts = Number(orderData.refundAttempts || 0) + 1;
+    const giveUp = attempts >= REFUND_MAX_ATTEMPTS;
     await orderRef.update({
       refundError: `MP ${r.status}: ${result.message || "erro"}`,
       refundAttemptedAt: Date.now(),
+      refundAttempts: attempts,
+      refundPending: !giveUp,
+      ...(giveUp ? { refundNeedsManual: true } : {}),
     });
-    return { error: result.message || `mp_${r.status}` };
+    return { error: result.message || `mp_${r.status}`, attempts, giveUp };
   }
 
   await orderRef.update({
@@ -849,6 +896,46 @@ exports.merchantAcceptanceTimeout = onSchedule(
     });
     await batch.commit();
     console.log(`[merchantTimeout] cancelados ${snap.size} pedidos`);
+  }
+);
+
+/**
+ * Sweep de retry: reprocessa estornos que ficaram `refundPending: true` mas
+ * ainda não saíram (ex.: na 1ª tentativa o saldo do lojista no MP ainda não
+ * estava disponível). O trigger `onOrderRefundPending` só dispara na transição
+ * false→true, então este agendado garante as novas tentativas.
+ */
+exports.retryPendingRefunds = onSchedule(
+  {
+    schedule: "every 5 minutes",
+    timeZone: "America/Sao_Paulo",
+    region: "us-central1",
+    secrets: [MP_ACCESS_TOKEN_SECRET],
+  },
+  async () => {
+    const snap = await admin
+      .firestore()
+      .collection(`artifacts/${APP_ID}/public/data/orders`)
+      .where("refundPending", "==", true)
+      .limit(50)
+      .get();
+    if (snap.empty) return;
+
+    let done = 0;
+    for (const doc of snap.docs) {
+      const data = doc.data();
+      if (data.refundId) {
+        await doc.ref.update({ refundPending: false });
+        continue;
+      }
+      try {
+        const res = await executeMpRefund(doc.ref, data, data.cancelReason || "retry");
+        if (res && res.ok) done++;
+      } catch (err) {
+        console.error(`[refund-retry] erro em ${doc.id}:`, err);
+      }
+    }
+    console.log(`[refund-retry] varridos ${snap.size}, estornados ${done}`);
   }
 );
 

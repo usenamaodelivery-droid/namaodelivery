@@ -149,8 +149,26 @@ async function openDetail(orderId) {
       if (act === "cancel") {
         const ok = await confirmDialog("Cancelar este pedido?");
         if (!ok) return;
-        await updateDoc(ref, { status: "cancelled", cancelledAt: Date.now(), cancelReason: "admin_cancelled" });
-        showToast("Pedido cancelado", "success");
+        // Se o pedido já foi pago, marca refundPending pra disparar o estorno
+        // PIX automático (Cloud Function onOrderRefundPending). Sem isso o
+        // dinheiro do cliente nunca voltava ao cancelar pelo admin.
+        const cur = (await getDoc(ref)).data() || {};
+        const wasPaid = Boolean(
+          cur.pixConfirmedAt ||
+          cur.paymentApprovedAt ||
+          ((cur.mpPaymentId || cur.paymentId) && cur.paymentStatus === "approved") ||
+          ["pending", "accepted", "in_transit", "awaiting_merchant_acceptance"].includes(cur.status)
+        );
+        await updateDoc(ref, {
+          status: "cancelled",
+          cancelledAt: Date.now(),
+          cancelReason: "admin_cancelled",
+          ...(wasPaid ? { refundPending: true } : {}),
+        });
+        showToast(
+          wasPaid ? "Pedido cancelado — estorno PIX em processamento" : "Pedido cancelado",
+          "success",
+        );
       } else if (act === "confirm") {
         const ok = await confirmDialog("Liberar pedido (PIX confirmado manualmente)?");
         if (!ok) return;
