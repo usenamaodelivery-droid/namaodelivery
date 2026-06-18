@@ -17,6 +17,8 @@ export async function registerDriver(uid, data) {
   };
   if (data.cnhPhoto) payload.cnhPhoto = data.cnhPhoto;
   if (data.selfiePhoto) payload.selfiePhoto = data.selfiePhoto;
+  if (data.cnhNumber) payload.cnhNumber = data.cnhNumber;
+  if (data.city) payload.city = data.city;
   await setDoc(ref, payload, { merge: true });
 }
 

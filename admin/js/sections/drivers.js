@@ -1,7 +1,7 @@
 // Motoristas: lista + filtros + ações (aprovar/bloquear/suspender) + KYC.
 import {
   collectionGroup, query, getDocs, doc, updateDoc, getDoc,
-  collection, where, orderBy,
+  collection, where, orderBy, addDoc,
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { db, APP_ID, DRIVER_SHARE } from "../firebase.js";
 import {
@@ -74,7 +74,7 @@ function filtered() {
 function row(d) {
   const name = d.name || d.fullName || "(sem nome)";
   const initials = name.split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
-  const photo = d.photoUrl || d.selfieUrl || "";
+  const photo = d.selfiePhoto || d.photoUrl || d.selfieUrl || "";
   return `
     <tr class="table-row border-t border-slate-100">
       <td class="px-5 py-3">
@@ -88,8 +88,8 @@ function row(d) {
         <p class="text-xs text-slate-500">${escapeHtml(d.email || d.phone || d.cpf || d.uid.slice(0, 8) + "...")}</p>
       </td>
       <td class="px-5 py-3">${badge(DRIVER_STATUS, d.status || "pending")}</td>
-      <td class="px-5 py-3 text-sm">${escapeHtml(d.veh || "Moto")}</td>
-      <td class="px-5 py-3 text-xs text-slate-500">${formatDate(d.createdAt)}</td>
+      <td class="px-5 py-3 text-sm">${escapeHtml(d.vehicleType || d.veh || "Moto")}</td>
+      <td class="px-5 py-3 text-xs text-slate-500">${formatDate(d.registeredAt || d.createdAt)}</td>
       <td class="px-5 py-3 text-right">
         <button onclick="window.driversSection.openDetail('${escapeHtml(d.uid)}')" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-100 hover:bg-slate-200">Detalhes</button>
       </td>
@@ -115,8 +115,8 @@ async function openDetail(uid) {
       </div>
 
       <div class="flex items-start gap-4 mb-5">
-        ${d.photoUrl || d.selfieUrl
-          ? `<img src="${escapeHtml(d.photoUrl || d.selfieUrl)}" class="w-20 h-20 rounded-2xl object-cover" />`
+        ${d.selfiePhoto || d.photoUrl || d.selfieUrl
+          ? `<img src="${escapeHtml(d.selfiePhoto || d.photoUrl || d.selfieUrl)}" class="w-20 h-20 rounded-2xl object-cover" />`
           : `<div class="w-20 h-20 rounded-2xl bg-slate-200 flex items-center justify-center text-2xl font-black text-slate-500">${escapeHtml((d.name || "??").split(" ").map((s)=>s[0]).slice(0,2).join("").toUpperCase())}</div>`
         }
         <div class="flex-1">
@@ -129,10 +129,10 @@ async function openDetail(uid) {
       <div class="grid grid-cols-2 gap-3 text-sm mb-5">
         <div><p class="text-tiny text-slate-500 uppercase font-bold">CPF</p><p class="font-mono">${escapeHtml(d.cpf || "—")}</p></div>
         <div><p class="text-tiny text-slate-500 uppercase font-bold">Telefone</p><p>${escapeHtml(d.phone || "—")}</p></div>
-        <div><p class="text-tiny text-slate-500 uppercase font-bold">CNH</p><p class="font-mono">${escapeHtml(d.cnh || "—")}</p></div>
-        <div><p class="text-tiny text-slate-500 uppercase font-bold">Veículo</p><p>${escapeHtml(d.veh || "—")} ${escapeHtml(d.plate || "")}</p></div>
+        <div><p class="text-tiny text-slate-500 uppercase font-bold">CNH (nº)</p><p class="font-mono">${escapeHtml(d.cnhNumber || d.cnh || "—")}</p></div>
+        <div><p class="text-tiny text-slate-500 uppercase font-bold">Veículo</p><p>${escapeHtml(d.vehicleType || d.veh || "—")} ${escapeHtml(d.plate || "")}</p></div>
         <div><p class="text-tiny text-slate-500 uppercase font-bold">Cidade</p><p>${escapeHtml(d.city || "—")}</p></div>
-        <div><p class="text-tiny text-slate-500 uppercase font-bold">Cadastro</p><p class="text-xs">${formatDate(d.createdAt)}</p></div>
+        <div><p class="text-tiny text-slate-500 uppercase font-bold">Cadastro</p><p class="text-xs">${formatDate(d.registeredAt || d.createdAt)}</p></div>
         <div><p class="text-tiny text-slate-500 uppercase font-bold">Chave PIX (${escapeHtml(d.pixKeyType || "—")})</p><p class="font-mono text-xs break-all">${escapeHtml(d.pixKey || "—")}</p></div>
         <div><p class="text-tiny text-slate-500 uppercase font-bold">UID</p><p class="font-mono text-xs break-all">${escapeHtml(d.uid)}</p></div>
       </div>
@@ -147,16 +147,27 @@ async function openDetail(uid) {
         <p class="text-xs text-slate-500 mt-2">${earn.count} entregas no total</p>
       </div>
 
-      ${(d.cnhUrl || d.crlvUrl || d.docUrl)
+      ${(d.selfiePhoto || d.cnhPhoto || d.cnhUrl || d.crlvUrl || d.docUrl)
         ? `<div class="mb-5">
-            <p class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Documentos</p>
-            <div class="flex gap-2 flex-wrap">
+            <p class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Documentos enviados <span class="text-tiny font-normal normal-case text-slate-400">(toque pra ampliar)</span></p>
+            <div class="grid grid-cols-2 gap-3">
+              ${d.selfiePhoto ? `<a href="${escapeHtml(d.selfiePhoto)}" target="_blank"><p class="text-tiny text-slate-500 mb-1 font-bold uppercase">Selfie</p><img src="${escapeHtml(d.selfiePhoto)}" class="w-full h-44 object-cover rounded-xl border border-slate-200" /></a>` : ""}
+              ${d.cnhPhoto ? `<a href="${escapeHtml(d.cnhPhoto)}" target="_blank"><p class="text-tiny text-slate-500 mb-1 font-bold uppercase">CNH</p><img src="${escapeHtml(d.cnhPhoto)}" class="w-full h-44 object-cover rounded-xl border border-slate-200" /></a>` : ""}
+            </div>
+            ${(d.cnhUrl || d.crlvUrl || d.docUrl) ? `<div class="flex gap-2 flex-wrap mt-2">
               ${d.cnhUrl  ? `<a href="${escapeHtml(d.cnhUrl)}" target="_blank" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-bold">CNH ↗</a>` : ""}
               ${d.crlvUrl ? `<a href="${escapeHtml(d.crlvUrl)}" target="_blank" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-bold">CRLV ↗</a>` : ""}
               ${d.docUrl  ? `<a href="${escapeHtml(d.docUrl)}" target="_blank" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-bold">Doc ↗</a>` : ""}
-              ${d.selfieUrl ? `<a href="${escapeHtml(d.selfieUrl)}" target="_blank" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-bold">Selfie ↗</a>` : ""}
-            </div>
-          </div>` : ""}
+            </div>` : ""}
+          </div>`
+        : `<div class="mb-5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Esse motorista não enviou foto da CNH nem selfie. Use "Enviar mensagem" abaixo pra pedir, e Suspenda até validar.</div>`}
+
+      <div class="border border-slate-200 rounded-xl p-3 mb-4">
+        <p class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2"><i class="fa-solid fa-paper-plane mr-1"></i>Enviar mensagem pro motorista</p>
+        <textarea id="driver-msg-text" rows="2" placeholder="Ex: Reenvie a foto da CNH legível, por favor." class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 mb-2 resize-none"></textarea>
+        <button id="driver-msg-send" class="w-full py-2.5 bg-slate-800 text-white font-black rounded-xl hover:bg-slate-900"><i class="fa-solid fa-paper-plane mr-2"></i>Enviar notificação</button>
+        <p class="text-tiny text-slate-400 mt-1.5">O motorista recebe como notificação push no app.</p>
+      </div>
 
       <div class="flex gap-2 flex-wrap">
         ${d.status !== "approved" ? `<button data-act="approve"  class="flex-1 py-2.5 bg-accent text-white font-black rounded-xl hover:bg-accent-dark"><i class="fa-solid fa-check mr-2"></i>Aprovar</button>` : ""}
@@ -168,6 +179,32 @@ async function openDetail(uid) {
   `;
 
   window.adminApp.openModal(html);
+
+  const sendBtn = document.getElementById("driver-msg-send");
+  if (sendBtn) {
+    sendBtn.addEventListener("click", async () => {
+      const ta = document.getElementById("driver-msg-text");
+      const text = (ta?.value || "").trim();
+      if (!text) { showToast("Escreva a mensagem", "error"); return; }
+      sendBtn.disabled = true;
+      try {
+        await addDoc(collection(db, `artifacts/${APP_ID}/public/data/broadcasts`), {
+          audience: "drivers",
+          targetUid: uid,
+          title: "Mensagem da NaMão",
+          message: text,
+          createdAt: Date.now(),
+        });
+        showToast("Mensagem enviada ao motorista", "success");
+        if (ta) ta.value = "";
+      } catch (e) {
+        showToast(e.message || "Erro ao enviar", "error");
+      } finally {
+        sendBtn.disabled = false;
+      }
+    });
+  }
+
   document.querySelectorAll("#modal-content [data-act]").forEach((b) => {
     b.addEventListener("click", async () => {
       const act = b.dataset.act;

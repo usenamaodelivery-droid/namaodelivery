@@ -1084,17 +1084,27 @@ exports.onMerchantAccepted = onDocumentUpdated(
  * Idempotente: marca o doc com broadcastedAt na primeira vez e nunca refaz.
  */
 async function notifyDriversBroadcast(broadcast, broadcastId) {
-  const profilesSnap = await admin
-    .firestore()
-    .collectionGroup("profile")
-    .where("status", "==", "approved")
-    .get();
   const tokens = [];
-  profilesSnap.forEach((doc) => {
-    if (doc.id !== "driverInfo") return;
-    const t = doc.get("fcmToken");
+  if (broadcast.targetUid) {
+    // Mensagem direta pra um motorista específico (enviada pelo admin).
+    const snap = await admin
+      .firestore()
+      .doc(`artifacts/${APP_ID}/users/${broadcast.targetUid}/profile/driverInfo`)
+      .get();
+    const t = snap.exists ? snap.get("fcmToken") : null;
     if (typeof t === "string" && t.length > 10) tokens.push(t);
-  });
+  } else {
+    const profilesSnap = await admin
+      .firestore()
+      .collectionGroup("profile")
+      .where("status", "==", "approved")
+      .get();
+    profilesSnap.forEach((doc) => {
+      if (doc.id !== "driverInfo") return;
+      const t = doc.get("fcmToken");
+      if (typeof t === "string" && t.length > 10) tokens.push(t);
+    });
+  }
   if (!tokens.length) return { sent: 0, failed: 0 };
 
   const title = String(broadcast.title || "Comunicado NaMão").slice(0, 80);

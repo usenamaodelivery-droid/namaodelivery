@@ -1033,6 +1033,8 @@ async function registerDriverFromUI(e) {
   const cpf = document.getElementById("driver-cpf").value.trim();
   const phone = document.getElementById("driver-phone").value.trim();
   const plate = document.getElementById("driver-plate").value.trim().toUpperCase();
+  const cnhNumber = document.getElementById("driver-cnh-number")?.value.trim() || "";
+  const city = document.getElementById("driver-city")?.value.trim() || "";
   const vehicleType = document.querySelector('input[name="reg-vehicle"]:checked')?.value || "Moto";
   const cnhFile = document.getElementById("driver-cnh").files[0];
   const selfieFile = document.getElementById("driver-selfie").files[0];
@@ -1054,7 +1056,7 @@ async function registerDriverFromUI(e) {
       fileToCompressedDataUrl(selfieFile, 600, 0.5)
     ]);
     await registerDriver(currentUser.uid, {
-      name, cpf, plate, phone, vehicleType, cnhPhoto, selfiePhoto
+      name, cpf, plate, phone, vehicleType, cnhPhoto, selfiePhoto, cnhNumber, city
     });
     showToast("Cadastro aprovado! Você já pode aceitar corridas.");
     switchView("inicio");
