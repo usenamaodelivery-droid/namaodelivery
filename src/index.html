@@ -20,9 +20,29 @@
     <script>
       // Registra o service worker (PWA installability + offline) — apenas no navegador.
       // Capacitor (Android nativo) já tem seu próprio runtime, então pulamos lá.
+      // AUTO-UPDATE: assim que uma versão nova do app é publicada, o SW novo é
+      // detectado, ativado na hora (skipWaiting no sw.js) e a página recarrega
+      // sozinha — o usuário nunca fica preso numa versão antiga nem precisa
+      // limpar cache.
       if ('serviceWorker' in navigator && !window.Capacitor) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('sw.js').catch(() => {});
+        var __hadController = !!navigator.serviceWorker.controller;
+        var __reloadingForUpdate = false;
+        navigator.serviceWorker.addEventListener('controllerchange', function () {
+          // 1ª instalação (não havia controller) não recarrega; só updates de verdade.
+          if (!__hadController) { __hadController = true; return; }
+          if (__reloadingForUpdate) return;
+          __reloadingForUpdate = true;
+          window.location.reload();
+        });
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('sw.js').then(function (reg) {
+            // Procura update imediatamente e sempre que o app volta pro foco.
+            reg.update().catch(function () {});
+            setInterval(function () { reg.update().catch(function () {}); }, 60 * 60 * 1000);
+            document.addEventListener('visibilitychange', function () {
+              if (document.visibilityState === 'visible') reg.update().catch(function () {});
+            });
+          }).catch(function () {});
         });
       }
 
