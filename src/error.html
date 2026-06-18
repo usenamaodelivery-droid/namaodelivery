@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Delivery NaMão</title>
+  <style>
+    html, body {
+      margin: 0; height: 100%;
+      background: #0f1b32; color: #fff;
+      font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+    }
+    .wrap {
+      height: 100%; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; text-align: center; padding: 24px;
+    }
+    h1 { font-size: 22px; margin: 16px 0 8px; }
+    p { color: #c7d0e0; margin: 0 0 24px; max-width: 320px; line-height: 1.5; }
+    button {
+      background: #E8B93A; color: #0f1b32; border: 0;
+      padding: 14px 28px; border-radius: 14px;
+      font-size: 16px; font-weight: 800; letter-spacing: .05em;
+    }
+    .logo { font-size: 28px; font-weight: 900; }
+    .logo span { color: #E8B93A; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="logo">Delivery <span>NaMão</span></div>
+    <h1>Sem conexão</h1>
+    <p>Não conseguimos carregar o aplicativo. Verifique sua internet e tente de novo.</p>
+    <button onclick="location.reload()">Tentar de novo</button>
+  </div>
+  <script>
+    // Tenta reconectar sozinho de tempos em tempos.
+    setInterval(function () { location.reload(); }, 8000);
+  </script>
+</body>
+</html>
