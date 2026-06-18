@@ -16,10 +16,7 @@ export function getTheme() {
     const v = localStorage.getItem(STORAGE_KEY);
     if (VALID.has(v)) return v;
   } catch { /* ignore */ }
-  // Default: respeita preferência do sistema
-  if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
-    return "dark";
-  }
+  // Default: sempre claro. Modo escuro só se o motorista escolher.
   return "light";
 }
 
@@ -55,18 +52,6 @@ export function toggleTheme() {
 
 export function initTheme() {
   applyTheme(getTheme());
-
-  // Reage a mudanças do sistema enquanto user não escolhe
-  if (window.matchMedia) {
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    mq.addEventListener?.("change", (e) => {
-      try {
-        if (!localStorage.getItem(STORAGE_KEY)) {
-          applyTheme(e.matches ? "dark" : "light");
-        }
-      } catch { /* ignore */ }
-    });
-  }
 }
 
 // Disponibiliza no escopo global pra onclick="toggleTheme()" no HTML

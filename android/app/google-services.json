@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "129438267740",
+    "project_id": "namao-delivery-prod",
+    "storage_bucket": "namao-delivery-prod.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:129438267740:android:72598d3a3d419bef696999",
+        "android_client_info": {
+          "package_name": "com.namao.delivery"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "129438267740-7cgh2q98mpmhtefhd8e6gv05scku22im.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDPtjfEmdXEzb_5_xY1ze_ETao_Kr6924s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "129438267740-7cgh2q98mpmhtefhd8e6gv05scku22im.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

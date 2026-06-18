@@ -1,0 +1,17 @@
+{
+  "projects": {
+    "default": "namao-delivery-prod"
+  },
+  "targets": {
+    "namao-delivery-prod": {
+      "hosting": {
+        "admin": [
+          "admin-namao"
+        ],
+        "entregador": [
+          "entregador-namao"
+        ]
+      }
+    }
+  }
+}

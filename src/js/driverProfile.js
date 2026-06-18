@@ -20,6 +20,20 @@ export async function registerDriver(uid, data) {
   await setDoc(ref, payload, { merge: true });
 }
 
+/** Salva o FCM token do device no perfil do motorista (merge). */
+export async function saveDriverFcmToken(uid, token) {
+  if (!uid || !token) return;
+  const ref = doc(db, "artifacts", APP_ID, "users", uid, "profile", "driverInfo");
+  await setDoc(ref, { fcmToken: token, fcmUpdatedAt: Date.now() }, { merge: true });
+}
+
+/** Liga/desliga notificações de novo pedido. */
+export async function setNotifyOnNewOrder(uid, enabled) {
+  if (!uid) return;
+  const ref = doc(db, "artifacts", APP_ID, "users", uid, "profile", "driverInfo");
+  await setDoc(ref, { notifyOnNewOrder: !!enabled }, { merge: true });
+}
+
 /** Ouve em tempo real status do motorista (para banimento) e dados de carteira. */
 export function subscribeDriverProfile(uid, cb) {
   const ref = doc(db, "artifacts", APP_ID, "users", uid, "profile", "driverInfo");

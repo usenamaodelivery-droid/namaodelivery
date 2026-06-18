@@ -23,6 +23,12 @@ async function getBackgroundPlugin() {
 }
 
 export async function startTracking(orderId) {
+  // Se já está rastreando outra corrida, reseta — durante o teste a gente
+  // viu o plugin enviar uma localização e depois ficar mudo, e ninguém
+  // chama stopTracking, então o flag `tracking` segurava o re-attach.
+  if (tracking && currentOrderId !== orderId) {
+    await stopTracking();
+  }
   if (tracking) return;
   tracking = true;
   currentOrderId = orderId;
@@ -30,27 +36,39 @@ export async function startTracking(orderId) {
 
   const bg = await getBackgroundPlugin();
   if (bg) {
-    // Plugin nativo: rodando mesmo em background / tela bloqueada
-    watchId = await bg.addWatcher(
-      {
-        backgroundMessage: "NaMão está usando sua localização",
-        backgroundTitle: "Entrega em andamento",
-        requestPermissions: true,
-        stale: false,
-        distanceFilter: 20
-      },
-      (location, error) => {
-        if (error) { console.error(error); return; }
-        throttledSend(location.latitude, location.longitude);
-      }
-    );
-  } else if (navigator.geolocation) {
-    // Fallback web
+    // Plugin nativo: rodando mesmo em background / tela bloqueada.
+    // distanceFilter 0 = recebe TODO update do GPS; o throttle abaixo
+    // garante que só salvamos no Firestore a cada LOCATION_UPDATE_MS.
+    try {
+      watchId = await bg.addWatcher(
+        {
+          backgroundMessage: "NaMão está usando sua localização",
+          backgroundTitle: "Entrega em andamento",
+          requestPermissions: true,
+          stale: false,
+          distanceFilter: 0
+        },
+        (location, error) => {
+          if (error) { console.error("[geo] watcher error", error); return; }
+          if (location && typeof location.latitude === "number") {
+            throttledSend(location.latitude, location.longitude);
+          }
+        }
+      );
+    } catch (e) {
+      console.error("[geo] bg addWatcher failed", e);
+    }
+  }
+
+  // SEMPRE rodamos o fallback navigator.geolocation por baixo, mesmo em
+  // nativo. Garante atualização periódica caso o plugin nativo deixe de
+  // enviar (Android suspende sensores em algumas situações).
+  if (navigator.geolocation) {
     intervalId = setInterval(() => {
       navigator.geolocation.getCurrentPosition(
         (p) => throttledSend(p.coords.latitude, p.coords.longitude),
-        (e) => console.warn("geo fallback error", e),
-        { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+        (e) => console.warn("[geo] fallback error", e),
+        { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
       );
     }, LOCATION_UPDATE_MS);
   }
