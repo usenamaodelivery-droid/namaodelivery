@@ -72,6 +72,8 @@ export function openPOD(orderId) {
   clearSignature();
   const photoInput = document.getElementById("delivery-photo");
   if (photoInput) photoInput.value = "";
+  const preview = document.getElementById("delivery-photo-preview");
+  if (preview) { preview.src = ""; preview.classList.add("hidden"); }
   validatePOD();
   document.getElementById("proof-delivery-modal").classList.remove("hidden");
 }
@@ -81,7 +83,23 @@ export function closePOD() {
 }
 
 export function validatePOD() {
-  const photo = document.getElementById("delivery-photo")?.files?.length > 0;
+  const input = document.getElementById("delivery-photo");
+  const photo = input?.files?.length > 0;
+  // Renderiza thumbnail da foto pra motorista conferir antes de enviar
+  const preview = document.getElementById("delivery-photo-preview");
+  if (preview) {
+    if (photo) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        preview.src = e.target.result;
+        preview.classList.remove("hidden");
+      };
+      reader.readAsDataURL(input.files[0]);
+    } else {
+      preview.src = "";
+      preview.classList.add("hidden");
+    }
+  }
   const btn = document.getElementById("btn-confirm-pod");
   if (!btn) return;
   const valid = photo && hasSignature;
@@ -129,6 +147,8 @@ export function openPickupPhoto(orderId) {
   currentPickupOrderId = orderId;
   const photoInput = document.getElementById("pickup-photo");
   if (photoInput) photoInput.value = "";
+  const preview = document.getElementById("pickup-photo-preview");
+  if (preview) { preview.src = ""; preview.classList.add("hidden"); }
   validatePickupPhoto();
   document.getElementById("pickup-photo-modal")?.classList.remove("hidden");
 }
@@ -138,7 +158,23 @@ export function closePickupPhoto() {
 }
 
 export function validatePickupPhoto() {
-  const photo = document.getElementById("pickup-photo")?.files?.length > 0;
+  const input = document.getElementById("pickup-photo");
+  const photo = input?.files?.length > 0;
+  // Thumbnail da foto da coleta
+  const preview = document.getElementById("pickup-photo-preview");
+  if (preview) {
+    if (photo) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        preview.src = e.target.result;
+        preview.classList.remove("hidden");
+      };
+      reader.readAsDataURL(input.files[0]);
+    } else {
+      preview.src = "";
+      preview.classList.add("hidden");
+    }
+  }
   const btn = document.getElementById("btn-confirm-pickup");
   if (!btn) return;
   btn.disabled = !photo;
@@ -167,9 +203,16 @@ export async function confirmPickupWithPhoto() {
       pickupPhotoUrl = await compressImage(file, 800, 0.6);
     }
 
-    await markInTransit(currentPickupOrderId, pickupPhotoUrl);
+    // Fecha na hora — a gravação roda em segundo plano pra não travar o motorista.
+    const orderId = currentPickupOrderId;
     closePickupPhoto();
-    showToast("Coleta confirmada — siga para o destino");
+    showToast("Confirmando coleta…");
+    markInTransit(orderId, pickupPhotoUrl)
+      .then(() => showToast("Coleta confirmada — siga para o destino"))
+      .catch((err) => {
+        console.error(err);
+        showToast(err?.message || "Falha ao confirmar coleta — tente de novo");
+      });
   } catch (err) {
     console.error(err);
     showToast(err?.message || "Falha ao confirmar coleta");
@@ -219,9 +262,18 @@ export async function confirmDeliveryWithPOD(driverId) {
       signatureUrl = canvas.toDataURL("image/png");
     }
 
-    await completeOrder({ orderId: currentOrderId, driverId, photoUrl, signatureUrl });
+    // Fecha na hora — a gravação + crédito rodam em segundo plano pra não
+    // travar o motorista. Em caso de erro, o pedido continua em trânsito e o
+    // motorista pode tentar de novo (aviso por toast).
+    const orderId = currentOrderId;
     closePOD();
-    showToast("Entrega finalizada! Ganhos de 85% creditados.");
+    showToast("Finalizando entrega…");
+    completeOrder({ orderId, driverId, photoUrl, signatureUrl })
+      .then(() => showToast("Entrega finalizada! Ganhos creditados (85% do frete)."))
+      .catch((err) => {
+        console.error(err);
+        showToast(err.message || "Falha ao finalizar — tente de novo");
+      });
   } catch (err) {
     console.error(err);
     showToast(err.message || "Falha ao enviar prova");

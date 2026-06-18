@@ -170,11 +170,14 @@ input, select, textarea {
 
 /* ===== Filter pills ===== */
 .filter-pill {
-  padding: 8px 14px;
+  padding: 8px 12px;
   border-radius: 10px;
   font-weight: 800;
   font-size: 12px;
   letter-spacing: 0.04em;
+  text-align: center;
+  white-space: nowrap;
+  min-width: 0;
 }
 .filter-pill.active {
   background: #1B304F;

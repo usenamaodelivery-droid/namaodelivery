@@ -18,5 +18,61 @@
         "firebase-debug.*.log"
       ]
     }
+  ],
+  "hosting": [
+    {
+      "target": "admin",
+      "public": "admin",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "rewrites": [
+        { "source": "**", "destination": "/index.html" }
+      ],
+      "headers": [
+        {
+          "source": "**/*.@(js|css)",
+          "headers": [
+            { "key": "Cache-Control", "value": "public, max-age=300, must-revalidate" }
+          ]
+        }
+      ]
+    },
+    {
+      "target": "entregador",
+      "public": "src",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "rewrites": [
+        { "source": "**", "destination": "/index.html" }
+      ],
+      "headers": [
+        {
+          "source": "**/*.@(js|css)",
+          "headers": [
+            { "key": "Cache-Control", "value": "public, max-age=300, must-revalidate" }
+          ]
+        },
+        {
+          "source": "manifest.webmanifest",
+          "headers": [
+            { "key": "Content-Type", "value": "application/manifest+json" },
+            { "key": "Cache-Control", "value": "public, max-age=300, must-revalidate" }
+          ]
+        },
+        {
+          "source": "sw.js",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
+            { "key": "Service-Worker-Allowed", "value": "/" }
+          ]
+        }
+      ]
+    }
   ]
 }

@@ -2,9 +2,127 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>NaMão Delivery — App do Entregador</title>
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="NaMão Entregador">
+    <meta name="application-name" content="NaMão Entregador">
+    <meta name="theme-color" content="#1B304F">
+    <meta name="description" content="Aceite corridas, ganhe 85% e receba via PIX. App do entregador NaMão.">
+    <title>Delivery NaMão — App do Entregador</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="apple-touch-icon" href="icons/namao-logo-192.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="icons/namao-logo-192.png">
+    <link rel="apple-touch-icon" sizes="256x256" href="icons/namao-logo-256.png">
+    <link rel="apple-touch-icon" sizes="512x512" href="icons/namao-logo-512.png">
+    <link rel="icon" type="image/png" href="icons/namao-icon.png">
+    <script>
+      // Registra o service worker (PWA installability + offline) — apenas no navegador.
+      // Capacitor (Android nativo) já tem seu próprio runtime, então pulamos lá.
+      // AUTO-UPDATE: assim que uma versão nova do app é publicada, o SW novo é
+      // detectado, ativado na hora (skipWaiting no sw.js) e a página recarrega
+      // sozinha — o usuário nunca fica preso numa versão antiga nem precisa
+      // limpar cache.
+      if ('serviceWorker' in navigator && !window.Capacitor) {
+        var __hadController = !!navigator.serviceWorker.controller;
+        var __reloadingForUpdate = false;
+        navigator.serviceWorker.addEventListener('controllerchange', function () {
+          // 1ª instalação (não havia controller) não recarrega; só updates de verdade.
+          if (!__hadController) { __hadController = true; return; }
+          if (__reloadingForUpdate) return;
+          __reloadingForUpdate = true;
+          window.location.reload();
+        });
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('sw.js').then(function (reg) {
+            // Procura update imediatamente e sempre que o app volta pro foco.
+            reg.update().catch(function () {});
+            setInterval(function () { reg.update().catch(function () {}); }, 60 * 60 * 1000);
+            document.addEventListener('visibilitychange', function () {
+              if (document.visibilityState === 'visible') reg.update().catch(function () {});
+            });
+          }).catch(function () {});
+        });
+      }
+
+      // Guarda defensiva: os botões ENTRAR / Criar Conta chamam funções globais
+      // que só existem DEPOIS que js/app.js (módulo ES + imports do Firebase via
+      // CDN) termina de carregar. Em rede móvel ruim isso demora, e tocar antes
+      // fazia o botão "não fazer nada". Aqui damos um stub que avisa o usuário
+      // até o app.js sobrescrever com a função real (que seta window.__appReady).
+      window.__appReady = false;
+      window.handleAuth = function () {
+        alert('Carregando o aplicativo… aguarde 1 segundo e toque de novo.');
+      };
+
+      // Mensagem visível na própria tela (não some como o toast e não fica
+      // escondida atrás do teclado). Usada pra guiar o cadastro e mostrar erros.
+      window.showAuthHint = function (msg, isError) {
+        var el = document.getElementById('auth-hint');
+        if (!el) { alert(msg); return; }
+        el.textContent = msg;
+        el.classList.remove('hidden');
+        el.style.color = isError ? '#fca5a5' : '#86efac';
+      };
+
+      // Alterna entre ENTRAR e CRIAR CONTA. Ao tocar em "Criar Nova Conta" o
+      // entregador vê na hora a instrução + o botão vira CRIAR CONTA, então
+      // fica claro o que fazer (em vez de "não acontecer nada").
+      window.__authMode = 'login';
+      window.setAuthMode = function (mode) {
+        window.__authMode = mode;
+        var primary = document.getElementById('auth-primary-btn');
+        var toggle = document.getElementById('auth-toggle-mode');
+        var hint = document.getElementById('auth-hint');
+        if (mode === 'signup') {
+          if (primary) primary.textContent = 'CRIAR CONTA';
+          if (toggle) toggle.textContent = 'Já tenho conta — Entrar';
+          if (hint) {
+            hint.textContent = 'Digite seu e-mail e senha acima e toque em CRIAR CONTA.';
+            hint.style.color = '#E8B93A';
+            hint.classList.remove('hidden');
+          }
+          var em = document.getElementById('auth-email');
+          if (em && !em.value) em.focus();
+        } else {
+          if (primary) primary.textContent = 'ENTRAR';
+          if (toggle) toggle.textContent = 'Criar Nova Conta';
+          if (hint) hint.classList.add('hidden');
+        }
+      };
+
+      // Mostrar/ocultar a senha (não depende do Firebase).
+      window.togglePasswordVisibility = function () {
+        var inp = document.getElementById('auth-password');
+        var btn = document.getElementById('toggle-password');
+        if (!inp) return;
+        var show = inp.type === 'password';
+        inp.type = show ? 'text' : 'password';
+        if (btn) {
+          btn.setAttribute('aria-label', show ? 'Ocultar senha' : 'Mostrar senha');
+          btn.innerHTML = show
+            ? '<i class="fa-solid fa-eye-slash"></i>'
+            : '<i class="fa-solid fa-eye"></i>';
+        }
+      };
+
+      // Quando o teclado abre no celular, ele tampava os campos de e-mail/senha.
+      // Ao focar um campo, rolamos ele pro centro da tela (com um pequeno delay
+      // pra esperar o teclado subir). A tela de auth agora é rolável.
+      window.addEventListener('DOMContentLoaded', function () {
+        ['auth-email', 'auth-password'].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (!el) return;
+          el.addEventListener('focus', function () {
+            setTimeout(function () {
+              try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+              catch (e) { el.scrollIntoView(); }
+            }, 300);
+          });
+        });
+      });
+    </script>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -40,15 +158,15 @@
     <div class="bg-white w-full h-full max-w-md shadow-2xl relative overflow-hidden flex flex-col sm:h-[850px] sm:rounded-[2rem] sm:border-8 border-gray-900">
 
         <!-- SPLASH SCREEN -->
-        <div id="splash-screen" class="absolute inset-0 z-[100] flex flex-col items-center justify-center transition-opacity duration-500" style="background: linear-gradient(135deg, #1B304F 0%, #0F1F3A 100%);">
+        <div id="splash-screen" class="absolute inset-0 z-[2100] flex flex-col items-center justify-center transition-opacity duration-500" style="background: linear-gradient(135deg, #1B304F 0%, #0F1F3A 100%);">
             <img src="icons/namao-icon.png" alt="Logo NaMão" class="w-36 h-36 rounded-3xl shadow-2xl mb-6 animate-bounce" onerror="this.onerror=null; this.src='https://via.placeholder.com/150/1B304F/E8B93A?text=N'">
-            <h1 class="text-5xl font-black tracking-tight text-white"><span class="text-accent">Na</span>Mão</h1>
-            <p class="text-accent mt-2 text-base tracking-[0.3em] uppercase font-extrabold">Delivery</p>
+            <h1 class="text-4xl font-black tracking-tight text-white"><span class="text-gray-200 font-light">Delivery</span> <span class="text-accent">Na</span>Mão</h1>
+            <p class="text-accent/90 mt-2 text-xs tracking-[0.3em] uppercase font-extrabold">App do Entregador</p>
             <div class="mt-10 border-4 border-accent border-t-transparent rounded-full w-10 h-10 animate-spin"></div>
         </div>
 
         <!-- OVERLAY DE BANIMENTO -->
-        <div id="account-blocked-overlay" class="absolute inset-0 hidden bg-primaryDark z-[200] flex flex-col items-center justify-center p-8 text-center text-white fade-in">
+        <div id="account-blocked-overlay" class="absolute inset-0 hidden bg-primaryDark z-[2200] flex flex-col items-center justify-center p-8 text-center text-white fade-in">
             <i class="fa-solid fa-user-lock text-7xl text-danger mb-6"></i>
             <h2 class="text-3xl font-black mb-3 uppercase tracking-tight">Acesso Negado</h2>
             <p id="block-message" class="text-gray-200 text-base mb-8 font-semibold">Esta conta foi suspensa por violar as regras de segurança.</p>
@@ -57,18 +175,22 @@
         </div>
 
         <!-- TELA DE AUTENTICAÇÃO -->
-        <div id="auth-screen" class="absolute inset-0 hidden z-[150] flex flex-col p-8 fade-in" style="background: linear-gradient(135deg, #1B304F 0%, #0F1F3A 100%);">
+        <div id="auth-screen" class="absolute inset-0 hidden z-[2000] flex flex-col p-8 overflow-y-auto no-scrollbar fade-in" style="background: linear-gradient(135deg, #1B304F 0%, #0F1F3A 100%);">
             <div class="flex-1 flex flex-col justify-center items-center text-center">
                 <img src="icons/namao-icon.png" class="w-24 h-24 rounded-3xl mb-6 shadow-2xl border-2 border-accent/40" alt="NaMão logo" onerror="this.onerror=null; this.src='https://via.placeholder.com/96/1B304F/E8B93A?text=N'">
-                <h1 class="text-5xl font-black text-white tracking-tight">Na<span class="text-accent">Mão</span></h1>
+                <h1 class="text-4xl font-black text-white tracking-tight"><span class="text-gray-200 font-light">Delivery</span> <span class="text-accent">Na</span>Mão</h1>
                 <p class="text-gray-200 text-sm font-extrabold mt-2 uppercase tracking-[0.3em] mb-3">App do Entregador</p>
                 <p class="text-accent/90 text-xs font-bold mb-10 max-w-xs">Aceite corridas, ganhe 85% e receba via PIX. Cadastro aprovado em 2 minutos.</p>
 
                 <div class="w-full">
-                    <input type="email" id="auth-email" placeholder="E-mail" class="w-full bg-white/10 border-2 border-white/20 rounded-xl p-4 mb-3 text-white placeholder-gray-300 outline-none focus:ring-2 focus:ring-accent text-base font-semibold">
-                    <input type="password" id="auth-password" placeholder="Senha" class="w-full bg-white/10 border-2 border-white/20 rounded-xl p-4 mb-5 text-white placeholder-gray-300 outline-none focus:ring-2 focus:ring-accent text-base font-semibold">
-                    <button onclick="handleAuth('login')" class="btn-accent w-full uppercase tracking-widest text-lg mb-4">ENTRAR</button>
-                    <button onclick="handleAuth('signup')" class="text-accent text-sm font-extrabold uppercase tracking-widest hover:opacity-80">Criar Nova Conta</button>
+                    <p id="auth-hint" class="hidden text-sm font-bold mb-4 max-w-xs mx-auto"></p>
+                    <input type="email" id="auth-email" placeholder="E-mail" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="email" class="w-full bg-white/10 border-2 border-white/20 rounded-xl p-4 mb-3 text-white placeholder-gray-300 outline-none focus:ring-2 focus:ring-accent text-base font-semibold">
+                    <div class="relative mb-5">
+                        <input type="password" id="auth-password" placeholder="Senha" autocapitalize="none" autocorrect="off" spellcheck="false" class="w-full bg-white/10 border-2 border-white/20 rounded-xl p-4 pr-12 text-white placeholder-gray-300 outline-none focus:ring-2 focus:ring-accent text-base font-semibold">
+                        <button type="button" id="toggle-password" onclick="togglePasswordVisibility()" aria-label="Mostrar senha" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-white p-2"><i class="fa-solid fa-eye"></i></button>
+                    </div>
+                    <button id="auth-primary-btn" onclick="handleAuth(window.__authMode || 'login')" class="btn-accent w-full uppercase tracking-widest text-lg mb-4 disabled:opacity-60">ENTRAR</button>
+                    <button id="auth-toggle-mode" onclick="setAuthMode((window.__authMode === 'signup') ? 'login' : 'signup')" class="text-accent text-sm font-extrabold uppercase tracking-widest hover:opacity-80">Criar Nova Conta</button>
                 </div>
             </div>
         </div>
@@ -77,7 +199,7 @@
         <header class="bg-primary text-white p-4 shadow-md z-20 flex justify-between items-center relative">
             <div class="flex items-center gap-3">
                 <img src="icons/namao-icon.png" alt="Logo" class="w-9 h-9 rounded-lg shadow-sm border border-white/10" onerror="this.style.display='none'">
-                <h1 class="text-2xl font-extrabold tracking-tight text-white"><span class="text-accent">Na</span>Mão <span class="text-gray-300 font-light text-base">Delivery</span></h1>
+                <h1 class="text-2xl font-extrabold tracking-tight text-white"><span class="text-gray-200 font-light text-base">Delivery</span> <span class="text-accent">Na</span>Mão</h1>
             </div>
             <div class="flex gap-2">
                 <button onclick="openWhatsAppSupport()" class="bg-primaryDark hover:bg-black px-3 py-2 rounded-xl text-base font-bold border border-white/20 text-accent flex items-center gap-1" aria-label="Suporte">
@@ -94,48 +216,102 @@
 
             <!-- VIEW: ENTREGADOR (MAPA + MURAL) -->
             <main id="view-entregador" class="absolute inset-0 flex flex-col bg-gray-100 no-scrollbar fade-in pb-20">
-                <!-- Mapa em destaque -->
-                <div class="w-full flex-1 bg-gray-200 relative shadow-inner">
+                <!-- Mapa: 32% sem corrida ativa, 100% durante corrida ativa -->
+                <div id="map-container" class="w-full bg-gray-200 relative shadow-inner shrink-0" style="height: 32%;">
                     <div id="map-entregador" class="w-full h-full"></div>
 
-                    <!-- HUD: status online + ganhos do dia (sobreposto no mapa) -->
-                    <div class="absolute top-3 left-3 right-3 z-10 flex justify-between items-start gap-2">
-                        <div class="bg-white/95 backdrop-blur px-3 py-2 rounded-2xl shadow-lg border border-white/40 flex items-center gap-2">
-                            <div id="online-dot" class="w-2.5 h-2.5 bg-green-500 rounded-full shadow-[0_0_8px_#22c55e] animate-pulse"></div>
+                    <!-- HUD: toggle online + ganhos do dia (some durante corrida ativa) -->
+                    <div id="map-hud" class="absolute top-3 left-3 right-3 flex justify-between items-start gap-2" style="z-index: 1000;">
+                        <button id="online-toggle" type="button" onclick="toggleDriverOnline()" aria-pressed="true"
+                            class="online-btn bg-white/95 backdrop-blur px-3 py-1.5 rounded-2xl shadow-lg border border-white/40 flex items-center gap-2 active:scale-[0.97] transition">
+                            <span id="online-dot" class="w-2.5 h-2.5 bg-green-500 rounded-full shadow-[0_0_8px_#22c55e] animate-pulse"></span>
                             <span id="online-label" class="text-xs font-extrabold text-primary uppercase tracking-wider">Online</span>
-                        </div>
-                        <div class="bg-primary/95 backdrop-blur px-4 py-2 rounded-2xl shadow-lg border border-accent/30 text-right">
-                            <p class="text-[10px] font-extrabold text-accent uppercase tracking-widest leading-none mb-0.5">Hoje</p>
-                            <p class="text-base font-black text-white leading-tight"><span id="today-earnings">R$ 0,00</span></p>
-                            <p class="text-[10px] font-bold text-white/70 leading-none"><span id="today-count">0</span> corridas</p>
+                        </button>
+                        <div class="bg-primary/95 backdrop-blur px-3 py-1.5 rounded-2xl shadow-lg border border-accent/30 text-right">
+                            <p class="text-[9px] font-extrabold text-accent uppercase tracking-widest leading-none">Hoje</p>
+                            <p class="text-sm font-black text-white leading-tight"><span id="today-earnings">R$ 0,00</span></p>
+                            <p class="text-[9px] font-bold text-white/70 leading-none"><span id="today-count">0</span> corridas</p>
                         </div>
                     </div>
 
-                    <!-- Botão de centralizar na minha localização -->
-                    <div class="absolute bottom-4 right-4 z-10">
-                        <button onclick="centerDriverMap()" aria-label="Centralizar na minha localização" class="bg-white p-3 rounded-full shadow-xl border border-gray-100 text-primary hover:bg-gray-50 transition transform active:scale-95">
-                            <i class="fa-solid fa-location-crosshairs text-xl"></i>
+                    <!-- Status pill durante corrida ativa (toca pra ver detalhes completos) -->
+                    <button id="active-status-pill" type="button" onclick="window.openActiveOrderDetails()" class="hidden absolute top-3 left-3 right-3 bg-primary/95 backdrop-blur rounded-2xl shadow-xl border border-accent/40 px-4 py-2.5 text-left active:scale-[0.99] transition" style="z-index: 1000;">
+                        <p id="active-status-line1" class="text-[10px] font-black text-accent uppercase tracking-widest leading-none mb-0.5"></p>
+                        <p id="active-status-line2" class="text-sm font-bold text-white leading-tight truncate"></p>
+                        <p id="active-status-line3" class="text-[11px] font-semibold text-white/80 leading-tight truncate mt-0.5"></p>
+                        <p class="text-[9px] font-bold text-accent/80 mt-1 leading-none"><i class="fa-solid fa-circle-info"></i> Toque para ver detalhes do pedido</p>
+                    </button>
+
+                    <!-- Action bar fixa no rodapé do mapa (sobre o mapa, acima do bottom nav) -->
+                    <div id="active-action-bar" class="hidden absolute left-3 right-3 flex flex-col gap-2" style="bottom: 12px; z-index: 1000;">
+                        <a id="active-nav-btn" href="#" target="_blank" class="block w-full text-center py-3.5 bg-accent text-primary font-black uppercase text-sm tracking-widest rounded-2xl shadow-2xl active:scale-[0.98] transition">
+                            <i class="fa-solid fa-route mr-2"></i> <span id="active-nav-label">IR PRO DESTINO</span>
+                        </a>
+                        <button id="active-confirm-btn" onclick="window.activeConfirmAction()" class="w-full py-3 bg-success text-white font-black uppercase text-sm tracking-widest rounded-2xl shadow-2xl active:scale-[0.98] transition">
+                            <i id="active-confirm-icon" class="fa-solid fa-camera mr-2"></i> <span id="active-confirm-label">CONFIRMAR COLETA</span>
+                        </button>
+                    </div>
+
+                    <!-- FAB: chat (canto inferior direito, acima da action bar) -->
+                    <button id="active-chat-fab" onclick="window.openChatModal()" class="hidden absolute right-3 bg-primary text-accent p-4 rounded-full shadow-2xl border-2 border-accent/60 active:scale-95 transition" style="bottom: 132px; z-index: 1001;">
+                        <i class="fa-solid fa-comments text-xl"></i>
+                        <span id="active-chat-fab-badge" class="hidden absolute -top-1 -right-1 bg-danger text-white text-[10px] font-black min-w-[20px] h-5 px-1.5 rounded-full flex items-center justify-center border-2 border-primary">0</span>
+                    </button>
+
+                    <!-- Botão de centralizar (oculto durante corrida ativa pra não atrapalhar) -->
+                    <div id="map-center-btn" class="absolute bottom-2 right-2" style="z-index: 1000;">
+                        <button onclick="centerDriverMap()" aria-label="Centralizar na minha localização" class="bg-white p-2 rounded-full shadow-xl border border-gray-100 text-primary hover:bg-gray-50 transition transform active:scale-95">
+                            <i class="fa-solid fa-location-crosshairs text-lg"></i>
                         </button>
                     </div>
                 </div>
 
-                <!-- Bottom sheet: corridas disponíveis -->
-                <div class="bg-white shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.12)] z-20 rounded-t-3xl relative -mt-5 flex flex-col max-h-[55%] border-t border-gray-100">
-                    <div class="w-12 h-1.5 bg-gray-300 rounded-full mx-auto my-3"></div>
-                    <div class="px-5 pb-3 flex justify-between items-center">
+                <!-- Mural de corridas disponíveis (oculto durante corrida ativa) -->
+                <div id="mural-section" class="bg-white shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.12)] z-20 rounded-t-3xl relative -mt-5 flex flex-col flex-1 min-h-0 border-t border-gray-100">
+                    <div class="w-12 h-1.5 bg-gray-300 rounded-full mx-auto my-2"></div>
+                    <div id="mural-header" class="px-5 pb-2">
                         <div class="flex items-center gap-2">
                             <i class="fa-solid fa-bolt text-accent text-lg"></i>
                             <h2 class="text-lg font-extrabold text-primary">Corridas Disponíveis</h2>
                             <span id="orders-count-pill" class="bg-primary text-accent text-tiny font-black px-2 py-0.5 rounded-full">0</span>
                         </div>
-                        <div class="bg-gray-100 p-1 rounded-xl flex gap-1">
-                            <button id="filter-todos" class="filter-pill active" onclick="setDriverFilter('Todos')">TUDO</button>
-                            <button id="filter-moto" class="filter-pill" onclick="setDriverFilter('Moto')">MOTO</button>
-                            <button id="filter-carro" class="filter-pill" onclick="setDriverFilter('Carro')">CARRO</button>
+                        <div class="mt-2 bg-gray-100 p-1 rounded-xl flex gap-1 w-full">
+                            <button id="filter-todos" class="filter-pill active flex-1" onclick="setDriverFilter('Todos')">TUDO</button>
+                            <button id="filter-moto" class="filter-pill flex-1" onclick="setDriverFilter('Moto')">MOTO</button>
+                            <button id="filter-carro" class="filter-pill flex-1" onclick="setDriverFilter('Carro')">CARRO</button>
                         </div>
                     </div>
                     <div class="px-4 pb-4 overflow-y-auto no-scrollbar flex-1">
                         <div id="available-orders-list" class="space-y-3"></div>
+                    </div>
+                </div>
+
+                <!-- Modal de detalhes da corrida (toca o card / pill) -->
+                <div id="order-details-modal" class="hidden absolute inset-0 bg-black/50 backdrop-blur-sm flex flex-col justify-end" style="z-index: 1500;" onclick="if(event.target.id==='order-details-modal')window.closeOrderDetails()">
+                    <div class="bg-white rounded-t-3xl shadow-2xl flex flex-col" style="max-height: 90%;" onclick="event.stopPropagation()">
+                        <div class="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+                            <p class="text-base font-black text-primary"><i class="fa-solid fa-receipt text-accent mr-2"></i>Detalhes do Pedido</p>
+                            <button onclick="window.closeOrderDetails()" class="text-primary text-xl p-2 active:scale-95"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <div id="order-details-body" class="px-4 py-4 overflow-y-auto flex-1"></div>
+                    </div>
+                </div>
+
+                <!-- Modal de chat (overlay full-screen quando aberto) -->
+                <div id="chat-modal" class="hidden absolute inset-0 bg-black/50 backdrop-blur-sm flex flex-col justify-end" style="z-index: 1500;" onclick="window.closeChatModalOnBg(event)">
+                    <div class="bg-white rounded-t-3xl shadow-2xl flex flex-col" style="max-height: 80%;" onclick="event.stopPropagation()">
+                        <div class="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+                            <div>
+                                <p class="text-base font-black text-primary"><i class="fa-solid fa-comments text-accent mr-2"></i>Chat com o cliente</p>
+                                <p class="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">privado · só aqui</p>
+                            </div>
+                            <button onclick="window.closeChatModal()" class="text-primary text-xl p-2 active:scale-95"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <div id="chat-messages" class="bg-gray-50 px-3 py-3 flex-1 overflow-y-auto flex flex-col gap-1.5"></div>
+                        <div class="flex gap-2 p-3 border-t border-gray-100 bg-white">
+                            <input id="chat-input" type="text" maxlength="500" placeholder="Mensagem…" class="flex-1 bg-gray-100 border border-gray-200 text-primary text-sm px-3 py-2.5 rounded-xl outline-none focus:border-accent" onkeydown="if(event.key==='Enter'){event.preventDefault();window.sendChatFromUI();}" />
+                            <button onclick="window.sendChatFromUI()" class="bg-accent text-primary font-black text-xs uppercase tracking-wider px-4 py-2 rounded-xl">Enviar</button>
+                        </div>
                     </div>
                 </div>
             </main>
@@ -164,6 +340,19 @@
                         <p class="text-tiny font-bold text-gray-500"><span id="stats-total-count">0</span> · <span id="stats-total-km">0 km</span></p>
                     </div>
                 </div>
+                <!-- Card explicativo do fluxo POD -->
+                <div class="mx-4 mt-4 bg-white border-2 border-accent/30 rounded-2xl p-4 shadow-sm">
+                    <div class="flex items-center gap-2 mb-2">
+                        <i class="fa-solid fa-circle-info text-accent text-lg"></i>
+                        <h3 class="text-sm font-extrabold text-primary uppercase tracking-wider">Como funciona uma corrida</h3>
+                    </div>
+                    <ol class="text-sm text-gray-700 space-y-1.5 pl-1">
+                        <li><span class="font-black text-accent">1.</span> Aceite a corrida no <b>Mural</b></li>
+                        <li><span class="font-black text-accent">2.</span> Vá até a <b>origem</b> e tire foto da coleta</li>
+                        <li><span class="font-black text-accent">3.</span> Entregue ao cliente, colha <b>assinatura + foto</b></li>
+                        <li><span class="font-black text-accent">4.</span> Toque em <b>"CONFIRMAR ENTREGA"</b> — pagamento vai pra carteira</li>
+                    </ol>
+                </div>
                 <div class="p-4">
                     <h3 class="text-xs font-extrabold text-gray-500 uppercase tracking-widest mb-3 px-1">Pedidos recentes</h3>
                     <div id="driver-history-list" class="space-y-3"></div>
@@ -173,8 +362,9 @@
             <!-- VIEW: PERFIL -->
             <main id="view-perfil" class="absolute inset-0 overflow-y-auto bg-gray-50 no-scrollbar hidden fade-in pb-24">
                 <div class="p-6 card-primary-gradient text-white text-center shadow-md relative" style="border-radius: 0 0 28px 28px;">
-                    <div class="w-24 h-24 bg-white text-primary rounded-full mx-auto mb-3 flex items-center justify-center text-4xl border-4 border-accent shadow-lg">
-                        <i class="fa-solid fa-user"></i>
+                    <div class="w-24 h-24 mx-auto mb-3 rounded-full overflow-hidden flex items-center justify-center border-4 border-accent shadow-lg bg-white text-primary text-4xl">
+                        <img id="profile-avatar-img" alt="" class="w-full h-full object-cover hidden" />
+                        <i id="profile-avatar-fallback" class="fa-solid fa-user"></i>
                     </div>
                     <h2 id="profile-display-name" class="text-2xl font-extrabold">Entregador</h2>
                     <p id="profile-status" class="text-accent text-base font-bold mt-1">Status: <span class="font-black">Aguardando cadastro</span></p>
@@ -186,6 +376,30 @@
                             <p class="text-4xl font-black">R$ <span id="profile-wallet-balance">0,00</span></p>
                         </div>
                         <i class="fa-solid fa-wallet text-4xl text-accent"></i>
+                    </div>
+
+                    <!-- Documentos enviados (CNH + Selfie) - aparece após cadastro -->
+                    <div id="driver-docs-card" class="hidden bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-sm font-extrabold text-gray-500 uppercase tracking-wider"><i class="fa-solid fa-id-card text-primary mr-1"></i> Meus Documentos</h3>
+                            <span class="text-tiny font-extrabold text-success uppercase"><i class="fa-solid fa-circle-check"></i> Verificados</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <p class="text-tiny font-bold text-gray-500 uppercase tracking-wider mb-1">CNH</p>
+                                <div class="rounded-xl overflow-hidden border-2 border-gray-100 bg-gray-50 aspect-[4/3] flex items-center justify-center cursor-pointer" onclick="openDocPreview('cnh')">
+                                    <img id="profile-cnh-img" alt="CNH" class="w-full h-full object-cover hidden" />
+                                    <i id="profile-cnh-fallback" class="fa-solid fa-id-card text-3xl text-gray-300"></i>
+                                </div>
+                            </div>
+                            <div>
+                                <p class="text-tiny font-bold text-gray-500 uppercase tracking-wider mb-1">Selfie</p>
+                                <div class="rounded-xl overflow-hidden border-2 border-gray-100 bg-gray-50 aspect-[4/3] flex items-center justify-center cursor-pointer" onclick="openDocPreview('selfie')">
+                                    <img id="profile-selfie-img" alt="Selfie" class="w-full h-full object-cover hidden" />
+                                    <i id="profile-selfie-fallback" class="fa-solid fa-user text-3xl text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <button id="cta-driver-banner" type="button" onclick="switchView('driver-registration')" class="cta-driver w-full text-left flex items-center gap-4 active:scale-[0.98] transition">
@@ -211,12 +425,49 @@
                                 <span class="theme-toggle-thumb"></span>
                             </button>
                         </div>
+                        <div class="border-t border-gray-100 -mx-2 px-2 py-3 flex justify-between items-center">
+                            <span class="flex items-center gap-3 text-primary text-base font-bold">
+                                <i class="fa-solid fa-bell text-primary text-xl w-6"></i>
+                                Notificar pedidos novos
+                            </span>
+                            <button id="notify-toggle" class="theme-toggle" type="button" aria-label="Notificar pedidos novos" aria-pressed="true" onclick="toggleNotifyOnNewOrder()">
+                                <span class="theme-toggle-thumb"></span>
+                            </button>
+                        </div>
                         <div class="border-t border-gray-100 -mx-2 px-2 py-3 flex justify-between items-center cursor-pointer" onclick="testNewOrderSound()">
                             <span class="flex items-center gap-3 text-primary text-base font-bold">
                                 <i class="fa-solid fa-volume-high text-primary text-xl w-6"></i>
                                 Testar som de novo pedido
                             </span>
                             <i class="fa-solid fa-play text-accent text-lg"></i>
+                        </div>
+                    </div>
+
+                    <!-- Permissões do app -->
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
+                        <h3 class="text-sm font-extrabold text-gray-500 mb-1 uppercase tracking-wider">Permissões</h3>
+                        <p class="text-xs text-gray-400 mb-4">Necessárias para receber e entregar corridas.</p>
+
+                        <div class="-mx-2 px-2 py-3 flex justify-between items-center cursor-pointer" onclick="requestAppPermission('notifications')">
+                            <span class="flex items-center gap-3 text-primary text-base font-bold">
+                                <i class="fa-solid fa-bell text-primary text-xl w-6"></i>
+                                Notificações
+                            </span>
+                            <span id="perm-notifications-status" class="text-xs font-extrabold uppercase tracking-wider px-3 py-1 rounded-full bg-gray-100 text-gray-500">VERIFICAR</span>
+                        </div>
+                        <div class="border-t border-gray-100 -mx-2 px-2 py-3 flex justify-between items-center cursor-pointer" onclick="requestAppPermission('location')">
+                            <span class="flex items-center gap-3 text-primary text-base font-bold">
+                                <i class="fa-solid fa-location-dot text-primary text-xl w-6"></i>
+                                Localização (GPS)
+                            </span>
+                            <span id="perm-location-status" class="text-xs font-extrabold uppercase tracking-wider px-3 py-1 rounded-full bg-gray-100 text-gray-500">VERIFICAR</span>
+                        </div>
+                        <div class="border-t border-gray-100 -mx-2 px-2 py-3 flex justify-between items-center cursor-pointer" onclick="requestAppPermission('camera')">
+                            <span class="flex items-center gap-3 text-primary text-base font-bold">
+                                <i class="fa-solid fa-camera text-primary text-xl w-6"></i>
+                                Câmera &amp; Fotos
+                            </span>
+                            <span id="perm-camera-status" class="text-xs font-extrabold uppercase tracking-wider px-3 py-1 rounded-full bg-gray-100 text-gray-500">VERIFICAR</span>
                         </div>
                     </div>
 
@@ -230,7 +481,7 @@
                     <button onclick="signOutUser()" class="w-full bg-red-50 text-danger font-extrabold py-4 rounded-2xl shadow-sm border-2 border-red-200 hover:bg-red-100 transition text-base">
                         <i class="fa-solid fa-right-from-bracket mr-2"></i> Sair da Conta
                     </button>
-                    <p class="text-center text-xs text-gray-400 mt-2 font-semibold">NaMão Delivery v1.5 · App do Entregador</p>
+                    <p class="text-center text-xs text-gray-400 mt-2 font-semibold">Delivery NaMão v1.7.0 · App do Entregador</p>
                 </div>
             </main>
 
@@ -258,6 +509,10 @@
                                 <input type="text" id="driver-cpf" required placeholder="CPF (teste com 171)" class="input-field">
                                 <input type="tel" id="driver-phone" required placeholder="WhatsApp" class="input-field">
                             </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <input type="text" id="driver-cnh-number" required placeholder="Nº da CNH" class="input-field">
+                                <input type="text" id="driver-city" required placeholder="Cidade" class="input-field">
+                            </div>
                         </div>
 
                         <!-- Verificação Biométrica -->
@@ -271,10 +526,11 @@
                                             <i class="fa-solid fa-camera text-primary text-3xl mb-2"></i>
                                             <p class="text-sm text-primary font-extrabold">Tirar foto da CNH</p>
                                         </div>
-                                        <input id="driver-cnh" type="file" accept="image/*" capture="environment" class="hidden" required onchange="updateFileLabel('driver-cnh', 'label-cnh')" />
+                                        <input id="driver-cnh" type="file" accept="image/*" capture="environment" class="hidden" required onchange="updateFileLabel('driver-cnh', 'label-cnh', 'preview-cnh')" />
                                     </label>
                                 </div>
                                 <p id="label-cnh" class="text-sm text-center text-success font-extrabold mt-2 hidden"><i class="fa-solid fa-check"></i> CNH Anexada</p>
+                                <div id="preview-cnh"></div>
                             </div>
 
                             <div class="relative">
@@ -285,10 +541,11 @@
                                             <i class="fa-solid fa-user-astronaut text-primary text-3xl mb-2"></i>
                                             <p class="text-sm text-primary font-extrabold">Tirar selfie</p>
                                         </div>
-                                        <input id="driver-selfie" type="file" accept="image/*" capture="user" class="hidden" required onchange="updateFileLabel('driver-selfie', 'label-selfie')" />
+                                        <input id="driver-selfie" type="file" accept="image/*" capture="user" class="hidden" required onchange="updateFileLabel('driver-selfie', 'label-selfie', 'preview-selfie')" />
                                     </label>
                                 </div>
                                 <p id="label-selfie" class="text-sm text-center text-success font-extrabold mt-2 hidden"><i class="fa-solid fa-check"></i> Selfie Anexada</p>
+                                <div id="preview-selfie"></div>
                             </div>
                         </div>
 
@@ -348,6 +605,18 @@
                     <div id="admin-security-logs" class="space-y-2"></div>
                 </div>
             </main>
+
+            <!-- Modal carteira motorista (saldo + chave PIX + saque) -->
+            <!-- Posicionado no nível do content-area pra abrir de qualquer view (Mural, Perfil, Atividade) -->
+            <div id="wallet-modal" class="hidden absolute inset-0 bg-black/50 backdrop-blur-sm flex flex-col justify-end" style="z-index: 1600;" onclick="if(event.target.id==='wallet-modal')window.closeDriverWallet()">
+                <div class="bg-white rounded-t-3xl shadow-2xl flex flex-col" style="max-height: 92%;" onclick="event.stopPropagation()">
+                    <div class="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+                        <p class="text-base font-black text-primary"><i class="fa-solid fa-wallet text-accent mr-2"></i>Meus Ganhos</p>
+                        <button onclick="window.closeDriverWallet()" class="text-primary text-xl p-2 active:scale-95"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div id="wallet-body" class="px-4 py-4 overflow-y-auto flex-1"></div>
+                </div>
+            </div>
         </div>
 
         <!-- MODAL VERIFICAÇÃO IA -->
@@ -371,7 +640,7 @@
         </div>
 
         <!-- MODAL Pickup Photo (foto da retirada — POD "antes") -->
-        <div id="pickup-photo-modal" class="absolute inset-0 bg-primaryDark/98 z-[700] hidden flex flex-col p-6 overflow-y-auto">
+        <div id="pickup-photo-modal" class="absolute inset-0 bg-primaryDark/98 z-[1600] hidden flex flex-col p-6 overflow-y-auto">
             <div class="bg-white rounded-3xl p-6 fade-in text-center shadow-2xl my-auto">
                 <i class="fa-solid fa-bag-shopping text-accent text-5xl mb-3"></i>
                 <h3 class="text-3xl font-black text-primary mb-2">Confirmar Coleta</h3>
@@ -380,6 +649,7 @@
                     <div>
                         <label class="text-sm font-extrabold text-primary uppercase tracking-wider block mb-2">Foto da retirada</label>
                         <input type="file" id="pickup-photo" accept="image/*" capture="environment" class="w-full text-base font-bold" onchange="validatePickupPhoto()">
+                        <img id="pickup-photo-preview" class="hidden mt-3 w-full max-h-56 object-contain rounded-2xl border-2 border-accent shadow-lg" alt="Pré-visualização da foto" />
                         <p class="text-xs text-gray-500 mt-2">Tira foto do pacote ou comida na hora da retirada — vira prova de que saiu certo do estabelecimento.</p>
                     </div>
                 </div>
@@ -389,7 +659,7 @@
         </div>
 
         <!-- MODAL POD (Prova de Entrega — foto "depois" + assinatura) -->
-        <div id="proof-delivery-modal" class="absolute inset-0 bg-primaryDark/98 z-[700] hidden flex flex-col p-6 overflow-y-auto">
+        <div id="proof-delivery-modal" class="absolute inset-0 bg-primaryDark/98 z-[1600] hidden flex flex-col p-6 overflow-y-auto">
             <div class="bg-white rounded-3xl p-6 fade-in text-center shadow-2xl my-auto">
                 <i class="fa-solid fa-camera-retro text-accent text-5xl mb-3"></i>
                 <h3 class="text-3xl font-black text-primary mb-2">Prova de Entrega</h3>
@@ -398,6 +668,7 @@
                     <div>
                         <label class="text-sm font-extrabold text-primary uppercase tracking-wider block mb-2">1. Foto do Local da Entrega</label>
                         <input type="file" id="delivery-photo" accept="image/*" capture="environment" class="w-full text-base font-bold" onchange="validatePOD()">
+                        <img id="delivery-photo-preview" class="hidden mt-3 w-full max-h-56 object-contain rounded-2xl border-2 border-accent shadow-lg" alt="Pré-visualização da foto" />
                     </div>
                     <div>
                         <label class="text-sm font-extrabold text-primary uppercase tracking-wider block mb-2">2. Assinatura do Cliente</label>
@@ -414,6 +685,14 @@
         <div id="toast-notification" class="fixed top-5 left-1/2 transform -translate-x-1/2 bg-primaryDark text-white px-5 py-3 rounded-2xl shadow-2xl z-[800] transition-all duration-300 opacity-0 pointer-events-none translate-y-[-20px] flex items-center gap-3 max-w-[90%] border border-white/10">
             <i class="fa-solid fa-bell text-accent text-xl"></i>
             <span id="toast-message" class="text-base font-bold text-white"></span>
+        </div>
+
+        <!-- LIGHTBOX: preview de documento (CNH/Selfie) -->
+        <div id="doc-preview-modal" class="hidden fixed inset-0 bg-black/90 z-[900] flex items-center justify-center p-4" onclick="closeDocPreview()">
+            <button class="absolute top-4 right-4 text-white text-3xl w-12 h-12 flex items-center justify-center bg-white/10 rounded-full" aria-label="Fechar">
+                <i class="fa-solid fa-times"></i>
+            </button>
+            <img id="doc-preview-img" alt="Documento" class="max-w-full max-h-full object-contain rounded-2xl shadow-2xl" />
         </div>
 
         <!-- BOTTOM NAV -->
