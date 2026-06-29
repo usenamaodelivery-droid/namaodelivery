@@ -1,7 +1,7 @@
 // Entrypoint da app — versão Driver-only (v1.5+).
 // Removida toda a lógica de cliente; este APK é exclusivo do entregador.
 
-import { onAuth, handleAuth, signOutUser } from "./auth.js";
+import { onAuth, handleAuth, signOutUser, resetPassword } from "./auth.js";
 import { showToast, switchView, hideSplash, updateFileLabel } from "./ui.js";
 import { initTheme, toggleTheme } from "./theme.js";
 import { refreshPermissionStatuses, requestAppPermission } from "./permissions.js";
@@ -1103,6 +1103,7 @@ async function registerDriverFromUI(e) {
 // --- Bindings globais usados pelos atributos onclick do HTML ---
 Object.assign(window, {
   handleAuth,
+  resetPassword,
   signOutUser,
   switchView,
   acceptOrderFromUI,

@@ -2,6 +2,7 @@ import {
   getAuth,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   onAuthStateChanged,
   signOut
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -64,6 +65,37 @@ export async function handleAuth(type) {
     if (primaryBtn) {
       primaryBtn.disabled = false;
       primaryBtn.innerHTML = originalText;
+    }
+  }
+}
+
+export async function resetPassword() {
+  if (authBusy) return;
+  const email = document.getElementById("auth-email").value.trim();
+  if (!email) {
+    hint("Digite seu e-mail no campo acima e toque em \"Esqueci minha senha\".", true);
+    document.getElementById("auth-email").focus();
+    return;
+  }
+
+  const link = document.getElementById("auth-forgot");
+  const originalText = link ? link.textContent : "";
+  authBusy = true;
+  if (link) {
+    link.style.pointerEvents = "none";
+    link.textContent = "Enviando…";
+  }
+
+  try {
+    await sendPasswordResetEmail(auth, email);
+    hint("Enviamos um link de redefinição para " + email + ". Confira a caixa de entrada e o spam.", false);
+  } catch (err) {
+    hint(mapAuthError(err.code) || err.message || "Não foi possível enviar o link", true);
+  } finally {
+    authBusy = false;
+    if (link) {
+      link.style.pointerEvents = "";
+      link.textContent = originalText;
     }
   }
 }
