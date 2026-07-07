@@ -427,7 +427,17 @@ function renderDriverMural() {
     return;
   }
 
-  let available = orders.filter((o) => o.status === "pending");
+  let available = orders.filter(
+    (o) =>
+      o.status === "pending" &&
+      !o.refundPending &&
+      !o.refundStatus &&
+      !o.cancelReason &&
+      !o.cancelledAt &&
+      !o.refundedAt &&
+      !o.merchantCancelledAt &&
+      !o.customerCancelledAt,
+  );
   if (driverFilter !== "Todos") available = available.filter((o) => o.veh === driverFilter);
 
   const pill = document.getElementById("orders-count-pill");
