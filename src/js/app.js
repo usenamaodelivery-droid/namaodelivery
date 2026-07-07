@@ -19,6 +19,7 @@ import {
   subscribeOrders,
   subscribeDriverOrders,
   acceptOrder,
+  releaseOrder,
   subscribeMessages,
   sendMessage,
 } from "./orders.js";
@@ -778,6 +779,10 @@ function populateActiveDeliveryUI(o) {
     confirmBtn.dataset.orderId = o.id;
     confirmBtn.dataset.action = isInTransit ? "delivery" : "pickup";
   }
+  const cancelBtn = document.getElementById("active-cancel-btn");
+  if (cancelBtn) {
+    cancelBtn.dataset.orderId = o.id;
+  }
 }
 
 function activeConfirmAction() {
@@ -1033,6 +1038,19 @@ async function acceptOrderFromUI(orderId) {
   }
 }
 
+async function releaseOrderFromUI(orderId) {
+  if (!currentUser) return;
+  const ok = window.confirm("Cancelar esta corrida? O pedido volta pro mural para outro motorista pegar.");
+  if (!ok) return;
+  try {
+    await releaseOrder(orderId, currentUser.uid);
+    await stopTracking().catch(() => {});
+    showToast("Corrida cancelada — voltou pro mural.");
+  } catch (err) {
+    showToast(err?.message || "Falha ao cancelar corrida");
+  }
+}
+
 async function openPODFromUI(orderId) {
   openPOD(orderId);
 }
@@ -1117,6 +1135,7 @@ Object.assign(window, {
   signOutUser,
   switchView,
   acceptOrderFromUI,
+  releaseOrderFromUI,
   openPODFromUI,
   clearSignature,
   validatePOD,
@@ -1126,6 +1145,10 @@ Object.assign(window, {
   setDriverStatus,
   promptAdmin,
   registerDriver: registerDriverFromUI,
+  releaseActiveOrder: () => {
+    const id = document.getElementById("active-cancel-btn")?.dataset.orderId;
+    if (id) releaseOrderFromUI(id);
+  },
   setDriverFilter: (f) => {
     driverFilter = f;
     ["filter-todos", "filter-moto", "filter-carro"].forEach((id) => {

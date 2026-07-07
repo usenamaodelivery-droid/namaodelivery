@@ -69,6 +69,40 @@ export async function acceptOrder(orderId, driverId, driverName) {
   });
 }
 
+/**
+ * Motorista desiste da corrida (teve um problema). O pedido VOLTA pro mural
+ * como "pending" e fica disponível pra outros motoristas. Limpa todos os
+ * dados do motorista anterior e a prova de coleta, sem cancelar o pedido.
+ */
+export async function releaseOrder(orderId, driverId) {
+  await runTransaction(db, async (tx) => {
+    const ref = doc(ordersCol(), orderId);
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error("Pedido não existe");
+    const data = snap.data();
+    if (!["accepted", "in_transit"].includes(data.status)) {
+      throw new Error("Só dá pra cancelar uma corrida que você aceitou");
+    }
+    if (data.driverId !== driverId) {
+      throw new Error("Apenas o motorista responsável pode cancelar");
+    }
+    tx.update(ref, {
+      status: "pending",
+      driverId: null,
+      driverName: null,
+      driverLat: null,
+      driverLng: null,
+      lastLocationAt: null,
+      acceptedAt: null,
+      pickupAt: null,
+      pickupPhotoUrl: null,
+      releasedByDriverAt: Date.now(),
+      lastReleasedBy: driverId,
+      releaseCount: (Number(data.releaseCount) || 0) + 1,
+    });
+  });
+}
+
 /** Atualiza posição do motorista (chamado pelo tracker de geolocalização). */
 export async function updateDriverLocation(orderId, lat, lng) {
   await updateDoc(doc(ordersCol(), orderId), {
