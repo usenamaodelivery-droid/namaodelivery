@@ -50,6 +50,14 @@ let unsubDriver = null;
 let unsubSecurity = null;
 let lastActiveOrderId = null;
 
+function isDriverMuralOrderVisible(o) {
+  if (!o || o.status !== "pending") return false;
+  if (["cancelled", "canceled", "refunded"].includes(String(o.status || "").toLowerCase())) return false;
+  if (o.refundPending || o.refundStatus) return false;
+  if (o.cancelReason || o.cancelledAt || o.refundedAt || o.merchantCancelledAt || o.customerCancelledAt) return false;
+  return true;
+}
+
 // --- Splash on load ---
 window.addEventListener("DOMContentLoaded", () => {
   initTheme();
@@ -299,7 +307,7 @@ function renderDriverMural() {
     if (pill) pill.innerText = "1";
     return;
   }
-  let available = orders.filter((o) => o.status === "pending");
+  let available = orders.filter(isDriverMuralOrderVisible);
   if (driverFilter !== "Todos") available = available.filter((o) => o.veh === driverFilter);
 
   const pill = document.getElementById("orders-count-pill");
