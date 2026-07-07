@@ -278,7 +278,18 @@ export function notifyNewOrder(order) {
  */
 export function processOrderUpdate(orders) {
   if (!Array.isArray(orders)) return;
-  const pending = orders.filter((o) => o?.status === "pending" && o?.id);
+  const pending = orders.filter(
+    (o) =>
+      o?.status === "pending" &&
+      o?.id &&
+      !o.refundPending &&
+      !o.refundStatus &&
+      !o.cancelReason &&
+      !o.cancelledAt &&
+      !o.refundedAt &&
+      !o.merchantCancelledAt &&
+      !o.customerCancelledAt,
+  );
   const currentIds = new Set(pending.map((o) => o.id));
 
   if (!bootstrapped) {
