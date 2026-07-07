@@ -14,6 +14,14 @@ const SOUND_URL = "sounds/new-order.mp3";
 let cachedAudio = null;
 let lastSeenOrderIds = new Set();
 let bootstrapped = false;
+
+function isAlertableOrder(o) {
+  if (!o || o.status !== "pending") return false;
+  if (["cancelled", "canceled", "refunded"].includes(String(o.status || "").toLowerCase())) return false;
+  if (o.refundPending || o.refundStatus) return false;
+  if (o.cancelReason || o.cancelledAt || o.refundedAt || o.merchantCancelledAt || o.customerCancelledAt) return false;
+  return Boolean(o.id);
+}
 let muted = false;
 
 function getAudio() {
@@ -112,7 +120,7 @@ export function notifyNewOrder(order) {
  */
 export function processOrderUpdate(orders) {
   if (!Array.isArray(orders)) return;
-  const pending = orders.filter((o) => o?.status === "pending" && o?.id);
+  const pending = orders.filter(isAlertableOrder);
   const currentIds = new Set(pending.map((o) => o.id));
 
   if (!bootstrapped) {
