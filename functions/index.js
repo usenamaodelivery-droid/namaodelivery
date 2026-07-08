@@ -286,6 +286,33 @@ exports.onOrderStatusChanged = onDocumentUpdated(
       await notifyAvailableDrivers(after, event.params.orderId);
     }
 
+    // Motorista DESISTIU (accepted/in_transit -> pending): re-despacha na hora
+    // pros outros motoristas (reseta o estado de dispatch e toca de novo) e avisa
+    // o cliente que estamos procurando outro. Sem isso a corrida voltava pro mural
+    // mas ninguém era avisado.
+    if (["accepted", "in_transit"].includes(before.status) && after.status === "pending") {
+      await notifyAvailableDrivers(after, event.params.orderId);
+      const ct = after.customerFcmToken;
+      if (typeof ct === "string" && ct.length > 10) {
+        try {
+          await admin.messaging().send({
+            token: ct,
+            notification: {
+              title: "Procurando outro motorista",
+              body: "O motorista anterior não pôde seguir. Já estamos chamando outro pra você.",
+            },
+            data: {
+              type: "order_update",
+              orderId: String(event.params.orderId),
+              status: "pending",
+            },
+          });
+        } catch (err) {
+          console.warn("[fcm] aviso cliente (procurando outro) falhou:", err?.message);
+        }
+      }
+    }
+
     // Corrida cancelada/estornada: AVISA O MOTORISTA responsável. Sem isso ele
     // continuava indo buscar o pedido e só descobria que sumiu ao reabrir o app.
     // Manda push (acorda o celular mesmo com app fechado) + som/vibração.

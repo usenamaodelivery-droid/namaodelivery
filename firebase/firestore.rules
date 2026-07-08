@@ -49,6 +49,14 @@ service cloud.firestore {
           && resource.data.status == 'accepted'
           && request.resource.data.status == 'in_transit'
           && unchanged('driverId') && unchanged('price') && unchanged('customerId'))
+        // MOTORISTA desiste da corrida: accepted/in_transit -> pending. O pedido
+        // VOLTA pro mural pra outro motorista pegar. driverId tem que ir a null.
+        || (isSignedIn()
+          && resource.data.driverId == request.auth.uid
+          && resource.data.status in ['accepted', 'in_transit']
+          && request.resource.data.status == 'pending'
+          && request.resource.data.driverId == null
+          && unchanged('price') && unchanged('customerId'))
         // MOTORISTA atualiza localização durante a corrida (sem mudar status)
         || (isSignedIn()
           && resource.data.driverId == request.auth.uid
