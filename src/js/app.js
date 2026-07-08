@@ -85,6 +85,10 @@ let chatMessages = [];
 let chatLastMsgCount = 0;
 let chatOpen = false;
 let chatUnread = 0;
+// Fluxo "avisar cliente": quando o motorista manda mensagem, marcamos a hora
+// aqui. Se o cliente NÃO responder em 60s, revelamos o botão de WhatsApp.
+let contactAttemptAt = null;
+let contactRevealTimer = null;
 
 // Estado online/offline persiste em localStorage. Default = online.
 let driverOnline = (() => {
@@ -942,6 +946,11 @@ function subscribeChat(orderId) {
       }
     }
     chatLastMsgCount = msgs.length;
+    // Cliente respondeu depois que o motorista tentou contato → esconde a
+    // barra de WhatsApp (já estão conversando, não precisa ligar).
+    if (contactAttemptAt && customerRepliedSince(contactAttemptAt)) {
+      resetCustomerContactFlow();
+    }
     renderChatPanel();
   });
 }
@@ -952,6 +961,59 @@ function unsubscribeChat() {
   chatLastMsgCount = 0;
   chatOpen = false;
   chatUnread = 0;
+  resetCustomerContactFlow();
+}
+
+// --- Contato com o cliente (mensagem primeiro, WhatsApp se não responder) ---
+function currentActiveOrder() {
+  return orders.find((o) => o.id === lastActiveOrderId) || null;
+}
+
+function customerRepliedSince(ts) {
+  if (!ts) return false;
+  return chatMessages.some((m) => m && m.from === "customer" && Number(m.at || 0) >= ts);
+}
+
+// Disparado quando o motorista manda uma mensagem no chat da corrida ativa.
+// Mostra o aviso "estamos entrando em contato" e agenda a revelação do botão
+// de WhatsApp caso o cliente não responda em 60s.
+function startCustomerContactFlow() {
+  const bar = document.getElementById("chat-contact-bar");
+  const note = document.getElementById("chat-contact-note");
+  const waBtn = document.getElementById("chat-whatsapp-btn");
+  if (!bar) return;
+  contactAttemptAt = Date.now();
+  bar.classList.remove("hidden");
+  if (note) note.textContent = "Estamos entrando em contato com o cliente pelo chat. Se ele não responder em 1 min, você poderá chamar no WhatsApp.";
+  if (waBtn) waBtn.style.display = "none";
+  if (contactRevealTimer) { clearTimeout(contactRevealTimer); }
+  const ord = currentActiveOrder();
+  const phone = ord && ord.customerPhone ? String(ord.customerPhone) : "";
+  if (!phone) return; // sem telefone do cliente não dá pra revelar WhatsApp
+  contactRevealTimer = setTimeout(() => {
+    if (!customerRepliedSince(contactAttemptAt)) revealCustomerWhatsApp(phone);
+  }, 60000);
+}
+
+function revealCustomerWhatsApp(phone) {
+  const note = document.getElementById("chat-contact-note");
+  const waBtn = document.getElementById("chat-whatsapp-btn");
+  if (note) note.textContent = "O cliente não respondeu no chat. Chame ele direto no WhatsApp:";
+  if (!waBtn) return;
+  const digits = String(phone).replace(/\D/g, "");
+  const num = digits.startsWith("55") ? digits : `55${digits}`;
+  const txt = encodeURIComponent("Olá! Sou o entregador do NaMão e estou com o seu pedido. Pode me atender?");
+  waBtn.href = `https://wa.me/${num}?text=${txt}`;
+  waBtn.style.display = "flex";
+}
+
+function resetCustomerContactFlow() {
+  contactAttemptAt = null;
+  if (contactRevealTimer) { clearTimeout(contactRevealTimer); contactRevealTimer = null; }
+  const bar = document.getElementById("chat-contact-bar");
+  const waBtn = document.getElementById("chat-whatsapp-btn");
+  if (bar) bar.classList.add("hidden");
+  if (waBtn) waBtn.style.display = "none";
 }
 
 function updateChatBadge() {
@@ -1027,6 +1089,9 @@ async function sendChatFromUI() {
   input.value = "";
   try {
     await sendMessage(lastActiveOrderId, "driver", text);
+    // Motorista tentou contato: mostra o aviso e agenda o WhatsApp p/ 1 min
+    // caso o cliente não responda.
+    startCustomerContactFlow();
   } catch (err) {
     console.warn("[chat] send failed:", err);
     showToast("Erro ao enviar mensagem.");
@@ -1110,14 +1175,14 @@ async function acceptOrderFromUI(orderId) {
   // antes, revertemos.
   orders = orders.map((o) =>
     o.id === orderId
-      ? { ...o, status: "accepted", driverId: currentUser.uid, driverName: driverProfile.name, acceptedAt: Date.now() }
+      ? { ...o, status: "accepted", driverId: currentUser.uid, driverName: driverProfile.name, driverPhone: driverProfile.phone || null, acceptedAt: Date.now() }
       : o,
   );
   switchView("inicio");
   renderAll();
 
   try {
-    await acceptOrder(orderId, currentUser.uid, driverProfile.name);
+    await acceptOrder(orderId, currentUser.uid, driverProfile.name, driverProfile.phone);
     await startTracking(orderId);
     showToast("Corrida aceita — vá para a coleta");
   } catch (err) {

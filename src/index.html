@@ -315,6 +315,14 @@
                             </div>
                             <button onclick="window.closeChatModal()" class="text-primary text-xl p-2 active:scale-95"><i class="fa-solid fa-xmark"></i></button>
                         </div>
+                        <!-- Barra de contato: aparece quando o motorista manda mensagem.
+                             Se o cliente não responder em 1 min, revela o botão de WhatsApp. -->
+                        <div id="chat-contact-bar" class="hidden px-5 py-2.5 bg-amber-50 border-b border-amber-100">
+                            <p id="chat-contact-note" class="text-[12px] font-bold text-amber-800 leading-snug"></p>
+                            <a id="chat-whatsapp-btn" href="#" target="_blank" rel="noopener" class="mt-2 w-full items-center justify-center gap-2 bg-[#25D366] text-white font-black text-sm uppercase tracking-wide px-4 py-2.5 rounded-xl active:scale-95 transition" style="display:none;">
+                                <i class="fa-brands fa-whatsapp text-lg"></i> Chamar cliente no WhatsApp
+                            </a>
+                        </div>
                         <div id="chat-messages" class="bg-gray-50 px-3 py-3 flex-1 overflow-y-auto flex flex-col gap-1.5"></div>
                         <div class="flex gap-2 p-3 border-t border-gray-100 bg-white">
                             <input id="chat-input" type="text" maxlength="500" placeholder="Mensagem…" class="flex-1 bg-gray-100 border border-gray-200 text-primary text-sm px-3 py-2.5 rounded-xl outline-none focus:border-accent" onkeydown="if(event.key==='Enter'){event.preventDefault();window.sendChatFromUI();}" />

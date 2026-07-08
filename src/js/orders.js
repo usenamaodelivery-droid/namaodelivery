@@ -54,7 +54,7 @@ export async function adminConfirmPix(orderId) {
 }
 
 /** Motorista aceita um pedido em "pending". */
-export async function acceptOrder(orderId, driverId, driverName) {
+export async function acceptOrder(orderId, driverId, driverName, driverPhone) {
   await runTransaction(db, async (tx) => {
     const ref = doc(ordersCol(), orderId);
     const snap = await tx.get(ref);
@@ -65,6 +65,9 @@ export async function acceptOrder(orderId, driverId, driverName) {
       status: "accepted",
       driverId,
       driverName,
+      // Telefone do motorista fica no pedido pra o cliente/loja poderem
+      // chamar no WhatsApp (só aparece pra eles quando a corrida é aceita).
+      driverPhone: driverPhone || null,
       acceptedAt: Date.now()
     });
   });
