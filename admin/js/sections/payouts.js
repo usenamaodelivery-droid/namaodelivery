@@ -153,7 +153,8 @@ async function openPaidSuccessModal(payout) {
   const phone = await loadDriverPhone(payout.driverId);
   const driverName = (phone?.name || payout.driverName || "").split(" ")[0] || "Motorista";
   const amount = formatBRL(payout.amount);
-  const receipt = payout.receiptUrl || "";
+  // Link curto e com marca NaMão em vez da URL gigante do Firebase Storage.
+  const receipt = payout.receiptUrl ? `https://delivery.usenamao.com/c/${payout.id}` : "";
   const message = `Olá ${driverName}! O PIX do seu saque de ${amount} foi enviado pela NaMão Delivery. ✅\n${receipt ? `Comprovante: ${receipt}` : ""}\n\nQualquer dúvida, é só responder por aqui.`.trim();
   const waLink = phone?.phone ? whatsappLink(phone.phone, message) : null;
 
