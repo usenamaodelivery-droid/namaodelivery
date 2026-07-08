@@ -197,6 +197,17 @@ function bindFcmListeners() {
           });
         } catch (err) { console.warn("[broadcast] cb threw:", err); }
       }
+    } else if (type === "order_cancelled") {
+      // Corrida cancelada: para a sirene (se estiver tocando), avisa na barra e
+      // dá um bipe. NÃO inicia o alarme de pedido novo.
+      stopOrderAlert();
+      try { playMessageSound(); } catch { /* ignore */ }
+      tryVibrate([400, 200, 400]);
+      showTrayNotification({
+        title: notif?.title || notif?.data?.title || "Corrida cancelada",
+        body: notif?.body || notif?.data?.body || "A corrida foi cancelada. Não vá buscar o pedido.",
+        channelId: ORDER_CHANNEL_ID,
+      });
     } else {
       // Default: tratar como novo pedido
       showTrayNotification({

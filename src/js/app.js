@@ -74,6 +74,9 @@ let unsubSecurity = null;
 let unsubMessages = null;
 let unsubBroadcasts = null;
 let lastActiveOrderId = null;
+// Quando o próprio motorista cancela a corrida, marcamos aqui pra NÃO mostrar o
+// alerta de "corrida cancelada pela loja" (senão ele veria o aviso do próprio ato).
+let selfReleasedOrderId = null;
 let chatMessages = [];
 let chatLastMsgCount = 0;
 let chatOpen = false;
@@ -822,6 +825,22 @@ function syncActiveDeliveryOnMap() {
     // idempotente, então chamar repetido não causa problema.
     startTracking(myActive.id).catch((err) => console.warn("[geo] startTracking failed", err));
   } else if (lastActiveOrderId) {
+    const endedId = lastActiveOrderId;
+    const ended = orders.find((o) => o.id === endedId);
+    // Cancelada = mudou pra cancelled/refunded OU sumiu do meu feed (cancelou e
+    // limpou o driverId). "completed" NÃO conta. Ato do próprio motorista também não.
+    const wasCancelled =
+      endedId !== selfReleasedOrderId &&
+      ((ended &&
+        (ended.status === "cancelled" ||
+          ended.status === "refunded" ||
+          ended.cancelledAt ||
+          ended.merchantCancelledAt ||
+          ended.customerCancelledAt ||
+          ended.refundedAt ||
+          ended.refundStatus)) ||
+        (!ended)); // sumiu do feed do motorista
+    if (endedId === selfReleasedOrderId) selfReleasedOrderId = null;
     lastActiveOrderId = null;
     clearActiveDelivery();
     unsubscribeChat();
@@ -831,7 +850,53 @@ function syncActiveDeliveryOnMap() {
     // Fecha modal de chat ao sair de corrida ativa
     const modal = document.getElementById("chat-modal");
     if (modal && !modal.classList.contains("hidden")) modal.classList.add("hidden");
+    if (wasCancelled) showRideCancelledAlert();
   }
+}
+
+// Alerta grande e sonoro quando a corrida ATIVA do motorista é cancelada pela
+// loja/admin. Complementa o push (que chega com app fechado): quando o app está
+// aberto em primeiro plano, o Android não mostra o push na barra, então este
+// modal garante que o motorista veja na hora e pare de ir buscar o pedido.
+function showRideCancelledAlert() {
+  try { playMessageSound(); } catch { /* ignore */ }
+  try { if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 400]); } catch { /* ignore */ }
+  if (document.getElementById("ride-cancelled-modal")) return;
+  const overlay = document.createElement("div");
+  overlay.id = "ride-cancelled-modal";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.style.cssText = `
+    position: fixed; inset: 0; z-index: 100000;
+    background: rgba(15,23,42,0.7); display: flex;
+    align-items: center; justify-content: center; padding: 16px;
+    backdrop-filter: blur(4px);
+  `;
+  const card = document.createElement("div");
+  card.style.cssText = `
+    background: #ffffff; color: #0f172a; text-align: center;
+    width: min(400px, 100%); border-radius: 18px; padding: 26px 22px 20px;
+    box-shadow: 0 18px 48px rgba(15,23,42,0.4);
+    font-family: system-ui, -apple-system, sans-serif;
+  `;
+  card.innerHTML = `
+    <div style="font-size:44px; line-height:1; margin-bottom:12px;">
+      <i class="fa-solid fa-circle-xmark" style="color:#dc2626;"></i>
+    </div>
+    <div style="font-size:20px; font-weight:800; margin-bottom:6px;">Corrida cancelada</div>
+    <div style="font-size:15px; color:#475569; margin-bottom:20px;">
+      A corrida foi cancelada pela loja. <b>Não vá buscar o pedido.</b>
+    </div>
+    <button id="ride-cancelled-ok" style="
+      width:100%; padding:14px; border:none; border-radius:12px;
+      background:#dc2626; color:#fff; font-size:16px; font-weight:800; cursor:pointer;">
+      Entendi
+    </button>`;
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  card.querySelector("#ride-cancelled-ok").addEventListener("click", close);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
 }
 
 function subscribeChat(orderId) {
@@ -1042,6 +1107,7 @@ async function releaseOrderFromUI(orderId) {
   if (!currentUser) return;
   const ok = window.confirm("Cancelar esta corrida? O pedido volta pro mural para outro motorista pegar.");
   if (!ok) return;
+  selfReleasedOrderId = orderId; // não mostrar o alerta de "cancelada pela loja"
   try {
     await releaseOrder(orderId, currentUser.uid);
     await stopTracking().catch(() => {});

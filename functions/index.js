@@ -107,8 +107,8 @@ exports.setAdminClaim = onCall(async (request) => {
 // O pedido NÃO vai pra todo motorista do mundo. Notifica primeiro quem está
 // mais perto do ponto de coleta; se ninguém pega, o raio cresce a cada ciclo
 // (re-toca) até o máximo. Motorista só recebe se estiver a no máx. 30 km.
-const DISPATCH_FIRST_RADIUS_KM = 8; // primeiro toque: só os bem perto
-const DISPATCH_STEP_KM = 7; // cresce o raio a cada re-toque
+const DISPATCH_FIRST_RADIUS_KM = 15; // primeiro toque: já cobre a cidade toda (sem atraso)
+const DISPATCH_STEP_KM = 8; // cresce o raio a cada re-toque
 const DISPATCH_MAX_RADIUS_KM = 30; // teto absoluto (regra do dono)
 const DISPATCH_RERING_MS = 2 * 60 * 1000; // re-toca a cada 2 min se ninguém pegar
 const DISPATCH_GIVEUP_MS = 30 * 60 * 1000; // para de re-tocar depois de 30 min
@@ -151,26 +151,32 @@ async function dispatchToDrivers(orderData, orderId, radiusKm) {
     .get();
 
   const now = Date.now();
-  const tokens = [];
+  const nearTokens = [];
+  const allTokens = [];
   profilesSnap.forEach((doc) => {
     if (doc.id !== "driverInfo") return;
     if (doc.get("notifyOnNewOrder") === false) return;
     const t = doc.get("fcmToken");
     if (typeof t !== "string" || t.length <= 10) return;
+    allTokens.push(t);
 
     if (pickup) {
       const lat = doc.get("lastLat");
       const lng = doc.get("lastLng");
       const at = doc.get("lastLocationAt");
-      // Sem localização recente => não dá pra garantir proximidade => não envia.
       if (typeof lat !== "number" || typeof lng !== "number") return;
       if (typeof at !== "number" || now - at > DRIVER_LOCATION_FRESH_MS) return;
       const dist = haversineKm(pickup.lat, pickup.lng, lat, lng);
       if (dist > radiusKm) return;
     }
-    tokens.push(t);
+    nearTokens.push(t);
   });
 
+  // Prioriza quem está perto e com GPS recente. Mas se NINGUÉM se qualifica
+  // (todos sem GPS recente, ou o motorista mais perto está logo além do raio),
+  // manda pra TODOS os motoristas aprovados com token — melhor um motorista um
+  // pouco mais longe receber do que o pedido não tocar em ninguém e ficar parado.
+  const tokens = nearTokens.length ? nearTokens : allTokens;
   if (!tokens.length) return 0;
 
   const veh = orderData.veh || "Moto";
@@ -278,6 +284,46 @@ exports.onOrderStatusChanged = onDocumentUpdated(
     // waiting_confirmation -> pending: PIX confirmado, notifica drivers
     if (before.status === "waiting_confirmation" && after.status === "pending") {
       await notifyAvailableDrivers(after, event.params.orderId);
+    }
+
+    // Corrida cancelada/estornada: AVISA O MOTORISTA responsável. Sem isso ele
+    // continuava indo buscar o pedido e só descobria que sumiu ao reabrir o app.
+    // Manda push (acorda o celular mesmo com app fechado) + som/vibração.
+    const CANCEL_STATES = ["cancelled", "refunded"];
+    if (CANCEL_STATES.includes(after.status) && !CANCEL_STATES.includes(before.status)) {
+      const driverId = before.driverId || after.driverId;
+      if (driverId) {
+        try {
+          const dSnap = await admin
+            .firestore()
+            .doc(`artifacts/${APP_ID}/users/${driverId}/profile/driverInfo`)
+            .get();
+          const dToken = dSnap.exists ? dSnap.get("fcmToken") : null;
+          if (typeof dToken === "string" && dToken.length > 10) {
+            await admin.messaging().send({
+              token: dToken,
+              notification: {
+                title: "Corrida cancelada",
+                body: "A corrida foi cancelada. NÃO vá buscar o pedido.",
+              },
+              android: {
+                priority: "high",
+                notification: {
+                  channelId: "namao_orders_v2",
+                  sound: "new_order",
+                  vibrateTimingsMillis: [0, 400, 200, 400, 200, 400],
+                },
+              },
+              data: {
+                type: "order_cancelled",
+                orderId: String(event.params.orderId),
+              },
+            });
+          }
+        } catch (err) {
+          console.warn("[fcm] cancel push pro motorista falhou:", err?.message);
+        }
+      }
     }
 
     // Notifica o cliente nas transições principais (precisa de customerFcmToken)
