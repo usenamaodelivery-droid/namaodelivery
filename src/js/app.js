@@ -1,7 +1,7 @@
 // Entrypoint da app — versão Driver-only (v1.5+).
 // Removida toda a lógica de cliente; este APK é exclusivo do entregador.
 
-import { onAuth, handleAuth, signOutUser } from "./auth.js";
+import { onAuth, handleAuth, signOutUser, resetPassword } from "./auth.js";
 import { showToast, switchView, hideSplash, updateFileLabel } from "./ui.js";
 import { initTheme, toggleTheme } from "./theme.js";
 import { refreshPermissionStatuses, requestAppPermission } from "./permissions.js";
@@ -18,7 +18,9 @@ import { subscribeBroadcasts, showBroadcastModal } from "./broadcasts.js";
 import {
   subscribeOrders,
   subscribeDriverOrders,
+  refetchDriverOrders,
   acceptOrder,
+  releaseOrder,
   subscribeMessages,
   sendMessage,
 } from "./orders.js";
@@ -70,13 +72,23 @@ let driverFilter = "Todos";
 let unsubOrders = null;
 let unsubDriver = null;
 let unsubSecurity = null;
+// Rede de segurança: re-lê os pedidos a cada 20s e re-renderiza, pra um
+// cancelamento/mudança aparecer na hora mesmo se o listener em tempo real cair.
+let orderRefreshTimer = null;
 let unsubMessages = null;
 let unsubBroadcasts = null;
 let lastActiveOrderId = null;
+// Quando o próprio motorista cancela a corrida, marcamos aqui pra NÃO mostrar o
+// alerta de "corrida cancelada pela loja" (senão ele veria o aviso do próprio ato).
+let selfReleasedOrderId = null;
 let chatMessages = [];
 let chatLastMsgCount = 0;
 let chatOpen = false;
 let chatUnread = 0;
+// Fluxo "avisar cliente": quando o motorista manda mensagem, marcamos a hora
+// aqui. Se o cliente NÃO responder em 60s, revelamos o botão de WhatsApp.
+let contactAttemptAt = null;
+let contactRevealTimer = null;
 
 // Estado online/offline persiste em localStorage. Default = online.
 let driverOnline = (() => {
@@ -100,6 +112,7 @@ onAuth(async (user) => {
     if (unsubOrders) { unsubOrders(); unsubOrders = null; }
     if (unsubDriver) { unsubDriver(); unsubDriver = null; }
     if (unsubSecurity) { unsubSecurity(); unsubSecurity = null; }
+    if (orderRefreshTimer) { clearInterval(orderRefreshTimer); orderRefreshTimer = null; }
     if (unsubBroadcasts) { unsubBroadcasts(); unsubBroadcasts = null; }
     currentUser = null;
     driverProfile = null;
@@ -144,6 +157,7 @@ onAuth(async (user) => {
     renderAll();
   };
   unsubOrders = subscribeDriverOrders(user.uid, onOrders);
+  startOrderAutoRefresh(user.uid, onOrders);
 
   initDriverMap();
   initSignaturePad();
@@ -168,6 +182,25 @@ onAuth(async (user) => {
     }
   }
 });
+
+// Auto-atualização de 20s: além do listener em tempo real, re-lê os pedidos e
+// re-renderiza. Se o cliente/loja cancelar e o push/listener falhar, o
+// cancelamento aparece pro motorista em no máximo 20s (a corrida some sozinha e
+// o alerta "Corrida cancelada" dispara via syncActiveDeliveryOnMap). Admin usa
+// a subscrição completa (todos os pedidos), então não usa este refetch enxuto.
+function startOrderAutoRefresh(uid, onOrders) {
+  if (orderRefreshTimer) { clearInterval(orderRefreshTimer); orderRefreshTimer = null; }
+  orderRefreshTimer = setInterval(async () => {
+    if (!currentUser || currentUser.uid !== uid) return;
+    if (window.__isAdmin) return; // admin: listener completo já cobre
+    try {
+      const list = await refetchDriverOrders(uid);
+      onOrders(list);
+    } catch (err) {
+      console.warn("[auto-refresh 20s] falhou:", err?.message);
+    }
+  }, 20000);
+}
 
 function applyDriverProfile() {
   const overlay = document.getElementById("account-blocked-overlay");
@@ -427,7 +460,17 @@ function renderDriverMural() {
     return;
   }
 
-  let available = orders.filter((o) => o.status === "pending");
+  let available = orders.filter(
+    (o) =>
+      o.status === "pending" &&
+      !o.refundPending &&
+      !o.refundStatus &&
+      !o.cancelReason &&
+      !o.cancelledAt &&
+      !o.refundedAt &&
+      !o.merchantCancelledAt &&
+      !o.customerCancelledAt,
+  );
   if (driverFilter !== "Todos") available = available.filter((o) => o.veh === driverFilter);
 
   const pill = document.getElementById("orders-count-pill");
@@ -768,6 +811,10 @@ function populateActiveDeliveryUI(o) {
     confirmBtn.dataset.orderId = o.id;
     confirmBtn.dataset.action = isInTransit ? "delivery" : "pickup";
   }
+  const cancelBtn = document.getElementById("active-cancel-btn");
+  if (cancelBtn) {
+    cancelBtn.dataset.orderId = o.id;
+  }
 }
 
 function activeConfirmAction() {
@@ -807,6 +854,22 @@ function syncActiveDeliveryOnMap() {
     // idempotente, então chamar repetido não causa problema.
     startTracking(myActive.id).catch((err) => console.warn("[geo] startTracking failed", err));
   } else if (lastActiveOrderId) {
+    const endedId = lastActiveOrderId;
+    const ended = orders.find((o) => o.id === endedId);
+    // Cancelada = mudou pra cancelled/refunded OU sumiu do meu feed (cancelou e
+    // limpou o driverId). "completed" NÃO conta. Ato do próprio motorista também não.
+    const wasCancelled =
+      endedId !== selfReleasedOrderId &&
+      ((ended &&
+        (ended.status === "cancelled" ||
+          ended.status === "refunded" ||
+          ended.cancelledAt ||
+          ended.merchantCancelledAt ||
+          ended.customerCancelledAt ||
+          ended.refundedAt ||
+          ended.refundStatus)) ||
+        (!ended)); // sumiu do feed do motorista
+    if (endedId === selfReleasedOrderId) selfReleasedOrderId = null;
     lastActiveOrderId = null;
     clearActiveDelivery();
     unsubscribeChat();
@@ -816,7 +879,53 @@ function syncActiveDeliveryOnMap() {
     // Fecha modal de chat ao sair de corrida ativa
     const modal = document.getElementById("chat-modal");
     if (modal && !modal.classList.contains("hidden")) modal.classList.add("hidden");
+    if (wasCancelled) showRideCancelledAlert();
   }
+}
+
+// Alerta grande e sonoro quando a corrida ATIVA do motorista é cancelada pela
+// loja/admin. Complementa o push (que chega com app fechado): quando o app está
+// aberto em primeiro plano, o Android não mostra o push na barra, então este
+// modal garante que o motorista veja na hora e pare de ir buscar o pedido.
+function showRideCancelledAlert() {
+  try { playMessageSound(); } catch { /* ignore */ }
+  try { if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 400]); } catch { /* ignore */ }
+  if (document.getElementById("ride-cancelled-modal")) return;
+  const overlay = document.createElement("div");
+  overlay.id = "ride-cancelled-modal";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.style.cssText = `
+    position: fixed; inset: 0; z-index: 100000;
+    background: rgba(15,23,42,0.7); display: flex;
+    align-items: center; justify-content: center; padding: 16px;
+    backdrop-filter: blur(4px);
+  `;
+  const card = document.createElement("div");
+  card.style.cssText = `
+    background: #ffffff; color: #0f172a; text-align: center;
+    width: min(400px, 100%); border-radius: 18px; padding: 26px 22px 20px;
+    box-shadow: 0 18px 48px rgba(15,23,42,0.4);
+    font-family: system-ui, -apple-system, sans-serif;
+  `;
+  card.innerHTML = `
+    <div style="font-size:44px; line-height:1; margin-bottom:12px;">
+      <i class="fa-solid fa-circle-xmark" style="color:#dc2626;"></i>
+    </div>
+    <div style="font-size:20px; font-weight:800; margin-bottom:6px;">Corrida cancelada</div>
+    <div style="font-size:15px; color:#475569; margin-bottom:20px;">
+      A corrida foi cancelada pela loja. <b>Não vá buscar o pedido.</b>
+    </div>
+    <button id="ride-cancelled-ok" style="
+      width:100%; padding:14px; border:none; border-radius:12px;
+      background:#dc2626; color:#fff; font-size:16px; font-weight:800; cursor:pointer;">
+      Entendi
+    </button>`;
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  card.querySelector("#ride-cancelled-ok").addEventListener("click", close);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
 }
 
 function subscribeChat(orderId) {
@@ -837,6 +946,11 @@ function subscribeChat(orderId) {
       }
     }
     chatLastMsgCount = msgs.length;
+    // Cliente respondeu depois que o motorista tentou contato → esconde a
+    // barra de WhatsApp (já estão conversando, não precisa ligar).
+    if (contactAttemptAt && customerRepliedSince(contactAttemptAt)) {
+      resetCustomerContactFlow();
+    }
     renderChatPanel();
   });
 }
@@ -847,6 +961,59 @@ function unsubscribeChat() {
   chatLastMsgCount = 0;
   chatOpen = false;
   chatUnread = 0;
+  resetCustomerContactFlow();
+}
+
+// --- Contato com o cliente (mensagem primeiro, WhatsApp se não responder) ---
+function currentActiveOrder() {
+  return orders.find((o) => o.id === lastActiveOrderId) || null;
+}
+
+function customerRepliedSince(ts) {
+  if (!ts) return false;
+  return chatMessages.some((m) => m && m.from === "customer" && Number(m.at || 0) >= ts);
+}
+
+// Disparado quando o motorista manda uma mensagem no chat da corrida ativa.
+// Mostra o aviso "estamos entrando em contato" e agenda a revelação do botão
+// de WhatsApp caso o cliente não responda em 60s.
+function startCustomerContactFlow() {
+  const bar = document.getElementById("chat-contact-bar");
+  const note = document.getElementById("chat-contact-note");
+  const waBtn = document.getElementById("chat-whatsapp-btn");
+  if (!bar) return;
+  contactAttemptAt = Date.now();
+  bar.classList.remove("hidden");
+  if (note) note.textContent = "Estamos entrando em contato com o cliente pelo chat. Se ele não responder em 1 min, você poderá chamar no WhatsApp.";
+  if (waBtn) waBtn.style.display = "none";
+  if (contactRevealTimer) { clearTimeout(contactRevealTimer); }
+  const ord = currentActiveOrder();
+  const phone = ord && ord.customerPhone ? String(ord.customerPhone) : "";
+  if (!phone) return; // sem telefone do cliente não dá pra revelar WhatsApp
+  contactRevealTimer = setTimeout(() => {
+    if (!customerRepliedSince(contactAttemptAt)) revealCustomerWhatsApp(phone);
+  }, 60000);
+}
+
+function revealCustomerWhatsApp(phone) {
+  const note = document.getElementById("chat-contact-note");
+  const waBtn = document.getElementById("chat-whatsapp-btn");
+  if (note) note.textContent = "O cliente não respondeu no chat. Chame ele direto no WhatsApp:";
+  if (!waBtn) return;
+  const digits = String(phone).replace(/\D/g, "");
+  const num = digits.startsWith("55") ? digits : `55${digits}`;
+  const txt = encodeURIComponent("Olá! Sou o entregador do NaMão e estou com o seu pedido. Pode me atender?");
+  waBtn.href = `https://wa.me/${num}?text=${txt}`;
+  waBtn.style.display = "flex";
+}
+
+function resetCustomerContactFlow() {
+  contactAttemptAt = null;
+  if (contactRevealTimer) { clearTimeout(contactRevealTimer); contactRevealTimer = null; }
+  const bar = document.getElementById("chat-contact-bar");
+  const waBtn = document.getElementById("chat-whatsapp-btn");
+  if (bar) bar.classList.add("hidden");
+  if (waBtn) waBtn.style.display = "none";
 }
 
 function updateChatBadge() {
@@ -922,6 +1089,9 @@ async function sendChatFromUI() {
   input.value = "";
   try {
     await sendMessage(lastActiveOrderId, "driver", text);
+    // Motorista tentou contato: mostra o aviso e agenda o WhatsApp p/ 1 min
+    // caso o cliente não responda.
+    startCustomerContactFlow();
   } catch (err) {
     console.warn("[chat] send failed:", err);
     showToast("Erro ao enviar mensagem.");
@@ -1005,14 +1175,14 @@ async function acceptOrderFromUI(orderId) {
   // antes, revertemos.
   orders = orders.map((o) =>
     o.id === orderId
-      ? { ...o, status: "accepted", driverId: currentUser.uid, driverName: driverProfile.name, acceptedAt: Date.now() }
+      ? { ...o, status: "accepted", driverId: currentUser.uid, driverName: driverProfile.name, driverPhone: driverProfile.phone || null, acceptedAt: Date.now() }
       : o,
   );
   switchView("inicio");
   renderAll();
 
   try {
-    await acceptOrder(orderId, currentUser.uid, driverProfile.name);
+    await acceptOrder(orderId, currentUser.uid, driverProfile.name, driverProfile.phone);
     await startTracking(orderId);
     showToast("Corrida aceita — vá para a coleta");
   } catch (err) {
@@ -1020,6 +1190,20 @@ async function acceptOrderFromUI(orderId) {
     orders = orders.map((o) => (o.id === orderId ? prev : o));
     renderAll();
     showToast(err.message || "Falha ao aceitar corrida");
+  }
+}
+
+async function releaseOrderFromUI(orderId) {
+  if (!currentUser) return;
+  const ok = window.confirm("Cancelar esta corrida? O pedido volta pro mural para outro motorista pegar.");
+  if (!ok) return;
+  selfReleasedOrderId = orderId; // não mostrar o alerta de "cancelada pela loja"
+  try {
+    await releaseOrder(orderId, currentUser.uid);
+    await stopTracking().catch(() => {});
+    showToast("Corrida cancelada — voltou pro mural.");
+  } catch (err) {
+    showToast(err?.message || "Falha ao cancelar corrida");
   }
 }
 
@@ -1103,9 +1287,11 @@ async function registerDriverFromUI(e) {
 // --- Bindings globais usados pelos atributos onclick do HTML ---
 Object.assign(window, {
   handleAuth,
+  resetPassword,
   signOutUser,
   switchView,
   acceptOrderFromUI,
+  releaseOrderFromUI,
   openPODFromUI,
   clearSignature,
   validatePOD,
@@ -1115,6 +1301,10 @@ Object.assign(window, {
   setDriverStatus,
   promptAdmin,
   registerDriver: registerDriverFromUI,
+  releaseActiveOrder: () => {
+    const id = document.getElementById("active-cancel-btn")?.dataset.orderId;
+    if (id) releaseOrderFromUI(id);
+  },
   setDriverFilter: (f) => {
     driverFilter = f;
     ["filter-todos", "filter-moto", "filter-carro"].forEach((id) => {

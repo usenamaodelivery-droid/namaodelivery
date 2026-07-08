@@ -55,6 +55,9 @@
       window.handleAuth = function () {
         alert('Carregando o aplicativo… aguarde 1 segundo e toque de novo.');
       };
+      window.resetPassword = function () {
+        alert('Carregando o aplicativo… aguarde 1 segundo e toque de novo.');
+      };
 
       // Mensagem visível na própria tela (não some como o toast e não fica
       // escondida atrás do teclado). Usada pra guiar o cadastro e mostrar erros.
@@ -189,7 +192,9 @@
                         <input type="password" id="auth-password" placeholder="Senha" autocapitalize="none" autocorrect="off" spellcheck="false" class="w-full bg-white/10 border-2 border-white/20 rounded-xl p-4 pr-12 text-white placeholder-gray-300 outline-none focus:ring-2 focus:ring-accent text-base font-semibold">
                         <button type="button" id="toggle-password" onclick="togglePasswordVisibility()" aria-label="Mostrar senha" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-white p-2"><i class="fa-solid fa-eye"></i></button>
                     </div>
-                    <button id="auth-primary-btn" onclick="handleAuth(window.__authMode || 'login')" class="btn-accent w-full uppercase tracking-widest text-lg mb-4 disabled:opacity-60">ENTRAR</button>
+                    <button id="auth-primary-btn" onclick="handleAuth(window.__authMode || 'login')" class="btn-accent w-full uppercase tracking-widest text-lg mb-3 disabled:opacity-60">ENTRAR</button>
+                    <button type="button" id="auth-forgot" onclick="resetPassword()" class="text-gray-300 text-sm font-bold underline underline-offset-2 hover:text-white mb-4">Esqueci minha senha</button>
+                    <div class="h-px bg-white/10 w-full mb-4"></div>
                     <button id="auth-toggle-mode" onclick="setAuthMode((window.__authMode === 'signup') ? 'login' : 'signup')" class="text-accent text-sm font-extrabold uppercase tracking-widest hover:opacity-80">Criar Nova Conta</button>
                 </div>
             </div>
@@ -250,6 +255,9 @@
                         <button id="active-confirm-btn" onclick="window.activeConfirmAction()" class="w-full py-3 bg-success text-white font-black uppercase text-sm tracking-widest rounded-2xl shadow-2xl active:scale-[0.98] transition">
                             <i id="active-confirm-icon" class="fa-solid fa-camera mr-2"></i> <span id="active-confirm-label">CONFIRMAR COLETA</span>
                         </button>
+                        <button id="active-cancel-btn" onclick="window.releaseActiveOrder()" class="w-full py-3 bg-danger text-white font-black uppercase text-sm tracking-widest rounded-2xl shadow-2xl border border-white/30 active:scale-[0.98] transition">
+                            <i class="fa-solid fa-xmark mr-2"></i> Cancelar corrida
+                        </button>
                     </div>
 
                     <!-- FAB: chat (canto inferior direito, acima da action bar) -->
@@ -306,6 +314,14 @@
                                 <p class="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">privado · só aqui</p>
                             </div>
                             <button onclick="window.closeChatModal()" class="text-primary text-xl p-2 active:scale-95"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <!-- Barra de contato: aparece quando o motorista manda mensagem.
+                             Se o cliente não responder em 1 min, revela o botão de WhatsApp. -->
+                        <div id="chat-contact-bar" class="hidden px-5 py-2.5 bg-amber-50 border-b border-amber-100">
+                            <p id="chat-contact-note" class="text-[12px] font-bold text-amber-800 leading-snug"></p>
+                            <a id="chat-whatsapp-btn" href="#" target="_blank" rel="noopener" class="mt-2 w-full items-center justify-center gap-2 bg-[#25D366] text-white font-black text-sm uppercase tracking-wide px-4 py-2.5 rounded-xl active:scale-95 transition" style="display:none;">
+                                <i class="fa-brands fa-whatsapp text-lg"></i> Chamar cliente no WhatsApp
+                            </a>
                         </div>
                         <div id="chat-messages" class="bg-gray-50 px-3 py-3 flex-1 overflow-y-auto flex flex-col gap-1.5"></div>
                         <div class="flex gap-2 p-3 border-t border-gray-100 bg-white">

@@ -1,6 +1,7 @@
 import {
   collection,
   onSnapshot,
+  getDocs,
   addDoc,
   updateDoc,
   doc,
@@ -53,7 +54,7 @@ export async function adminConfirmPix(orderId) {
 }
 
 /** Motorista aceita um pedido em "pending". */
-export async function acceptOrder(orderId, driverId, driverName) {
+export async function acceptOrder(orderId, driverId, driverName, driverPhone) {
   await runTransaction(db, async (tx) => {
     const ref = doc(ordersCol(), orderId);
     const snap = await tx.get(ref);
@@ -64,7 +65,44 @@ export async function acceptOrder(orderId, driverId, driverName) {
       status: "accepted",
       driverId,
       driverName,
+      // Telefone do motorista fica no pedido pra o cliente/loja poderem
+      // chamar no WhatsApp (só aparece pra eles quando a corrida é aceita).
+      driverPhone: driverPhone || null,
       acceptedAt: Date.now()
+    });
+  });
+}
+
+/**
+ * Motorista desiste da corrida (teve um problema). O pedido VOLTA pro mural
+ * como "pending" e fica disponível pra outros motoristas. Limpa todos os
+ * dados do motorista anterior e a prova de coleta, sem cancelar o pedido.
+ */
+export async function releaseOrder(orderId, driverId) {
+  await runTransaction(db, async (tx) => {
+    const ref = doc(ordersCol(), orderId);
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error("Pedido não existe");
+    const data = snap.data();
+    if (!["accepted", "in_transit"].includes(data.status)) {
+      throw new Error("Só dá pra cancelar uma corrida que você aceitou");
+    }
+    if (data.driverId !== driverId) {
+      throw new Error("Apenas o motorista responsável pode cancelar");
+    }
+    tx.update(ref, {
+      status: "pending",
+      driverId: null,
+      driverName: null,
+      driverLat: null,
+      driverLng: null,
+      lastLocationAt: null,
+      acceptedAt: null,
+      pickupAt: null,
+      pickupPhotoUrl: null,
+      releasedByDriverAt: Date.now(),
+      lastReleasedBy: driverId,
+      releaseCount: (Number(data.releaseCount) || 0) + 1,
     });
   });
 }
@@ -183,6 +221,24 @@ export function subscribeDriverOrders(uid, cb) {
   });
 
   return () => { unsubPending(); unsubMine(); };
+}
+
+/**
+ * Leitura ÚNICA (sem listener) dos pedidos do motorista — mesma lógica do
+ * subscribeDriverOrders. Serve de rede de segurança: um timer chama isso a
+ * cada poucos segundos e re-renderiza, garantindo que um cancelamento/mudança
+ * apareça na hora mesmo se o listener em tempo real tiver caído.
+ */
+export async function refetchDriverOrders(uid) {
+  const col = ordersCol();
+  const [pendSnap, mineSnap] = await Promise.all([
+    getDocs(query(col, where("status", "==", "pending"))),
+    getDocs(query(col, where("driverId", "==", uid))),
+  ]);
+  const merged = new Map();
+  pendSnap.forEach((d) => merged.set(d.id, { id: d.id, ...d.data() }));
+  mineSnap.forEach((d) => merged.set(d.id, { id: d.id, ...d.data() }));
+  return [...merged.values()].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 }
 
 /* ---------------- Chat interno cliente ↔ motorista ---------------- */
