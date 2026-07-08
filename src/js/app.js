@@ -18,6 +18,7 @@ import { subscribeBroadcasts, showBroadcastModal } from "./broadcasts.js";
 import {
   subscribeOrders,
   subscribeDriverOrders,
+  refetchDriverOrders,
   acceptOrder,
   releaseOrder,
   subscribeMessages,
@@ -71,6 +72,9 @@ let driverFilter = "Todos";
 let unsubOrders = null;
 let unsubDriver = null;
 let unsubSecurity = null;
+// Rede de segurança: re-lê os pedidos a cada 20s e re-renderiza, pra um
+// cancelamento/mudança aparecer na hora mesmo se o listener em tempo real cair.
+let orderRefreshTimer = null;
 let unsubMessages = null;
 let unsubBroadcasts = null;
 let lastActiveOrderId = null;
@@ -104,6 +108,7 @@ onAuth(async (user) => {
     if (unsubOrders) { unsubOrders(); unsubOrders = null; }
     if (unsubDriver) { unsubDriver(); unsubDriver = null; }
     if (unsubSecurity) { unsubSecurity(); unsubSecurity = null; }
+    if (orderRefreshTimer) { clearInterval(orderRefreshTimer); orderRefreshTimer = null; }
     if (unsubBroadcasts) { unsubBroadcasts(); unsubBroadcasts = null; }
     currentUser = null;
     driverProfile = null;
@@ -148,6 +153,7 @@ onAuth(async (user) => {
     renderAll();
   };
   unsubOrders = subscribeDriverOrders(user.uid, onOrders);
+  startOrderAutoRefresh(user.uid, onOrders);
 
   initDriverMap();
   initSignaturePad();
@@ -172,6 +178,25 @@ onAuth(async (user) => {
     }
   }
 });
+
+// Auto-atualização de 20s: além do listener em tempo real, re-lê os pedidos e
+// re-renderiza. Se o cliente/loja cancelar e o push/listener falhar, o
+// cancelamento aparece pro motorista em no máximo 20s (a corrida some sozinha e
+// o alerta "Corrida cancelada" dispara via syncActiveDeliveryOnMap). Admin usa
+// a subscrição completa (todos os pedidos), então não usa este refetch enxuto.
+function startOrderAutoRefresh(uid, onOrders) {
+  if (orderRefreshTimer) { clearInterval(orderRefreshTimer); orderRefreshTimer = null; }
+  orderRefreshTimer = setInterval(async () => {
+    if (!currentUser || currentUser.uid !== uid) return;
+    if (window.__isAdmin) return; // admin: listener completo já cobre
+    try {
+      const list = await refetchDriverOrders(uid);
+      onOrders(list);
+    } catch (err) {
+      console.warn("[auto-refresh 20s] falhou:", err?.message);
+    }
+  }, 20000);
+}
 
 function applyDriverProfile() {
   const overlay = document.getElementById("account-blocked-overlay");

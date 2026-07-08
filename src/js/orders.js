@@ -1,6 +1,7 @@
 import {
   collection,
   onSnapshot,
+  getDocs,
   addDoc,
   updateDoc,
   doc,
@@ -217,6 +218,24 @@ export function subscribeDriverOrders(uid, cb) {
   });
 
   return () => { unsubPending(); unsubMine(); };
+}
+
+/**
+ * Leitura ÚNICA (sem listener) dos pedidos do motorista — mesma lógica do
+ * subscribeDriverOrders. Serve de rede de segurança: um timer chama isso a
+ * cada poucos segundos e re-renderiza, garantindo que um cancelamento/mudança
+ * apareça na hora mesmo se o listener em tempo real tiver caído.
+ */
+export async function refetchDriverOrders(uid) {
+  const col = ordersCol();
+  const [pendSnap, mineSnap] = await Promise.all([
+    getDocs(query(col, where("status", "==", "pending"))),
+    getDocs(query(col, where("driverId", "==", uid))),
+  ]);
+  const merged = new Map();
+  pendSnap.forEach((d) => merged.set(d.id, { id: d.id, ...d.data() }));
+  mineSnap.forEach((d) => merged.set(d.id, { id: d.id, ...d.data() }));
+  return [...merged.values()].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 }
 
 /* ---------------- Chat interno cliente ↔ motorista ---------------- */
