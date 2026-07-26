@@ -35,7 +35,6 @@ import {
   clearActiveDelivery,
 } from "./maps.js";
 import {
-  DRIVER_SHARE,
   PLATFORM_FEE,
   SUPPORT_WHATSAPP,
 } from "./firebaseConfig.js";
@@ -200,6 +199,17 @@ function isThisWeek(ts) {
   return d >= weekStart && d <= now;
 }
 
+// Ganho do motorista = valor gravado no pedido (fonte única, fatia do frete).
+// Nunca recalcula sobre o total: pedido novo lê driverEarningsCents; histórico
+// legado mostra o driverEarnings que foi realmente pago. Sem os dois campos,
+// loga e devolve null (não inventa número).
+function orderDriverEarnings(o) {
+  if (typeof o.driverEarningsCents === "number") return o.driverEarningsCents / 100;
+  if (typeof o.driverEarnings === "number") return o.driverEarnings;
+  console.error(`[earnings] pedido ${o.id} sem driverEarningsCents/driverEarnings — não invento valor`);
+  return null;
+}
+
 function computeStats(predicate) {
   if (!currentUser) return { earnings: 0, count: 0, km: 0 };
   let earnings = 0, count = 0, km = 0;
@@ -207,7 +217,7 @@ function computeStats(predicate) {
     if (o.driverId !== currentUser.uid) continue;
     if (o.status !== "completed") continue;
     if (!predicate(o.completedAt || o.createdAt)) continue;
-    earnings += Number(o.driverEarnings ?? (o.price * DRIVER_SHARE) ?? 0);
+    earnings += Number(orderDriverEarnings(o) ?? 0);
     count += 1;
     km += Number(o.distanceKm || 0);
   }
@@ -267,7 +277,7 @@ function renderDriverHistoryCard(o) {
     completed: { label: "Entregue", color: "bg-green-100 text-green-800", icon: "fa-circle-check" },
     cancelled: { label: "Cancelada", color: "bg-red-100 text-red-800", icon: "fa-circle-xmark" }
   }[o.status] || { label: o.status, color: "bg-gray-100 text-gray-700", icon: "fa-circle" };
-  const earning = Number(o.driverEarnings ?? (o.price * DRIVER_SHARE) ?? 0);
+  const earning = orderDriverEarnings(o);
   const itemIcon = {
     Comida: "fa-burger",
     Documentos: "fa-file-alt",
@@ -285,7 +295,7 @@ function renderDriverHistoryCard(o) {
         </div>
         <div class="text-right">
           <p class="text-tiny font-extrabold text-gray-500 uppercase">Você ganhou</p>
-          <p class="font-black text-primary text-xl">${fmtBRL(earning)}</p>
+          <p class="font-black text-primary text-xl">${earning == null ? "—" : fmtBRL(earning)}</p>
         </div>
       </div>
       <span class="status-pill ${statusInfo.color}">
@@ -322,7 +332,8 @@ function renderDriverMural() {
 }
 
 function renderAvailableOrderCard(o) {
-  const earning = (o.price * DRIVER_SHARE).toFixed(2).replace(".", ",");
+  const earnVal = orderDriverEarnings(o);
+  const earning = earnVal == null ? "—" : `R$ ${earnVal.toFixed(2).replace(".", ",")}`;
   const itemIcon = {
     Comida: "fa-burger",
     Documentos: "fa-file-alt",
@@ -335,7 +346,7 @@ function renderAvailableOrderCard(o) {
         <span class="bg-accent text-primary text-xs font-black px-3 py-1.5 rounded-full uppercase flex items-center gap-1">
           <i class="fa-solid ${itemIcon}"></i> ${o.itemType || "Item"} · ${o.veh}${km ? ` · ${km}` : ""}
         </span>
-        <p class="text-3xl font-black text-accent">R$ ${earning}</p>
+        <p class="text-3xl font-black text-accent">${earning}</p>
       </div>
       <div class="text-sm font-bold space-y-2 mb-4">
         <p><i class="fa-solid fa-location-dot text-accent w-5"></i> ${o.origin || "—"}</p>
@@ -348,7 +359,8 @@ function renderAvailableOrderCard(o) {
 }
 
 function renderActiveDelivery(o) {
-  const earning = (o.price * DRIVER_SHARE).toFixed(2).replace(".", ",");
+  const earnVal = orderDriverEarnings(o);
+  const earning = earnVal == null ? "—" : `R$ ${earnVal.toFixed(2).replace(".", ",")}`;
   const isInTransit = o.status === "in_transit";
   const km = o.distanceKm ? `${Number(o.distanceKm).toFixed(1)} km` : "";
 
@@ -363,7 +375,7 @@ function renderActiveDelivery(o) {
   return `
     <div class="card-primary-gradient p-5">
       <p class="text-xs font-black text-accent uppercase tracking-widest mb-3">
-        <i class="fa-solid fa-circle-dot fa-beat-fade"></i> Entrega em andamento — R$ ${earning}${km ? ` · ${km}` : ""}
+        <i class="fa-solid fa-circle-dot fa-beat-fade"></i> Entrega em andamento — ${earning}${km ? ` · ${km}` : ""}
       </p>
       <div class="text-sm font-bold space-y-2 mb-4">
         <p><i class="fa-solid fa-location-dot text-accent w-5"></i> ${o.origin || "—"}</p>
