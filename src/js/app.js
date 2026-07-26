@@ -36,6 +36,7 @@ import {
 } from "./maps.js";
 import {
   DRIVER_SHARE,
+  PLATFORM_FEE,
   SUPPORT_WHATSAPP,
 } from "./firebaseConfig.js";
 import { runVerification } from "./aiVerification.js";
@@ -399,7 +400,7 @@ function renderAdminPanel() {
   const gross = orders
     .filter((o) => o.status === "completed")
     .reduce((a, b) => a + Number(b.price || 0), 0);
-  const net = gross * 0.15;
+  const net = gross * PLATFORM_FEE;
   const grossEl = document.getElementById("admin-gross");
   const netEl = document.getElementById("admin-net");
   if (grossEl) grossEl.innerText = `R$ ${gross.toFixed(2).replace(".", ",")}`;
