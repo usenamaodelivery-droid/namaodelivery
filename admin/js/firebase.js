@@ -18,9 +18,10 @@ export const firebaseConfig = {
 
 export const APP_ID = "namao-delivery-prod";
 
-// Constantes de negócio (mesmas do driver/PWA)
-export const PLATFORM_FEE = 0.15;
-export const DRIVER_SHARE = 0.85;
+// Constantes de negócio (mesmas do driver/PWA).
+// Divisão do FRETE entre motorista e plataforma (não é comissão da loja).
+export const PLATFORM_FEE = 0.12;
+export const DRIVER_SHARE = 0.88;
 
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);

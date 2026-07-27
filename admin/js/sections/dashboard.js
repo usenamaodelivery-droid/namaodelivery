@@ -2,8 +2,11 @@
 import {
   collection, collectionGroup, query, where, orderBy, limit, getDocs, getCountFromServer,
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { db, APP_ID, PLATFORM_FEE, DRIVER_SHARE } from "../firebase.js";
-import { formatBRL, formatDate, badge, ORDER_STATUS, escapeHtml } from "../util.js";
+import { db, APP_ID, DRIVER_SHARE } from "../firebase.js";
+import {
+  formatBRL, formatDate, badge, ORDER_STATUS, escapeHtml,
+  orderDriverEarnings, orderDeliveryMargin,
+} from "../util.js";
 
 const ORDERS_PATH = `artifacts/${APP_ID}/public/data/orders`;
 const MERCHANTS_PATH = `artifacts/${APP_ID}/public/data/merchants`;
@@ -50,11 +53,16 @@ async function loadKpis() {
   );
   let monthRevenue = 0;
   let monthCompleted = 0;
+  let monthDriverPayouts = 0;
+  let monthDeliveryMargin = 0;
   last30.forEach((d) => {
     const o = d.data();
     if (o.status === "completed") {
       monthRevenue += Number(o.price || 0);
       monthCompleted++;
+      // Repasse e margem incidem SÓ sobre o frete (fonte única em util.js).
+      monthDriverPayouts += orderDriverEarnings(o, DRIVER_SHARE) || 0;
+      monthDeliveryMargin += orderDeliveryMargin(o, DRIVER_SHARE) || 0;
     }
   });
 
@@ -113,8 +121,8 @@ async function loadKpis() {
     monthRevenue,
     monthCompleted,
     monthOrdersTotal,
-    monthCommission: monthRevenue * PLATFORM_FEE,
-    monthDriverPayouts: monthRevenue * DRIVER_SHARE,
+    monthCommission: monthDeliveryMargin,
+    monthDriverPayouts,
     monthUniqueCustomers: customers.size,
     driversTotal,
     driversApproved,
@@ -167,7 +175,7 @@ export async function renderDashboard({ content }) {
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
       ${kpiCard({ label: "Receita Hoje",       value: formatBRL(kpis.todayRevenue),     sub: `${kpis.todayCompleted} pedidos concluídos`, icon: "fa-sack-dollar", color: "#22C55E" })}
       ${kpiCard({ label: "Pedidos Ativos",     value: String(kpis.activeOrdersCount),   sub: `${kpis.todayActive} hoje`, icon: "fa-box", color: "#3B82F6" })}
-      ${kpiCard({ label: "Lojas no catálogo",  value: String(kpis.merchantsVisible),    sub: `${kpis.merchantsActive} ativas · ${kpis.merchantsCommissionFree} NaMão ATIVO`, icon: "fa-store", color: "#8B5CF6" })}
+      ${kpiCard({ label: "Lojas no catálogo",  value: String(kpis.merchantsVisible),    sub: `${kpis.merchantsActive} ativas · ${kpis.merchantsCommissionFree} sem comissão`, icon: "fa-store", color: "#8B5CF6" })}
       ${kpiCard({ label: "Motoristas",         value: String(kpis.driversTotal),         sub: `${kpis.driversApproved} aprovados · ${kpis.driversPending} pendentes`, icon: "fa-motorcycle", color: "#F59E0B" })}
     </div>
 
@@ -175,8 +183,8 @@ export async function renderDashboard({ content }) {
     <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
       ${kpiCard({ label: "Receita Total (30d)",      value: formatBRL(kpis.monthRevenue),         sub: `${kpis.monthCompleted} entregas concluídas`, icon: "fa-chart-line", color: "#22C55E" })}
       ${kpiCard({ label: "Clientes únicos",          value: String(kpis.monthUniqueCustomers),    sub: `${kpis.monthOrdersTotal} pedidos totais`,    icon: "fa-users", color: "#06B6D4" })}
-      ${kpiCard({ label: "Repasse Motoristas (85% frete)", value: formatBRL(kpis.monthDriverPayouts),   sub: "saiu (ou vai sair) via PIX",                icon: "fa-money-bill-transfer", color: "#3B82F6" })}
-      ${kpiCard({ label: "Margem NaMão (15% frete)", value: formatBRL(kpis.monthCommission),     sub: "spread sobre frete · não cobrado do lojista", icon: "fa-trophy", color: "#F59E0B" })}
+      ${kpiCard({ label: "Repasse Motoristas (88% frete)", value: formatBRL(kpis.monthDriverPayouts),   sub: "saiu (ou vai sair) via PIX",                icon: "fa-money-bill-transfer", color: "#3B82F6" })}
+      ${kpiCard({ label: "Margem NaMão (frete)", value: formatBRL(kpis.monthCommission),     sub: "spread sobre frete · não cobrado do lojista", icon: "fa-trophy", color: "#F59E0B" })}
     </div>
 
     <div class="bg-white rounded-2xl shadow-card overflow-hidden">

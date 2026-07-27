@@ -23,6 +23,34 @@ export function formatBRL(n) {
   return "R$ " + v.toFixed(2).replace(".", ",");
 }
 
+// ---- Split do pedido (fonte única) ------------------------------------------
+// A divisão motorista/plataforma incide SÓ sobre o FRETE (taxa de entrega),
+// nunca sobre o total (produtos + frete). A comissão da loja é coisa à parte,
+// incide sobre o produto e vem de commissionCents (0% loja ativa, 15% delivery).
+
+// Frete do pedido, em reais. null quando não gravado.
+export function orderFreteReais(o) {
+  return typeof o.deliveryPriceCents === "number" ? o.deliveryPriceCents / 100 : null;
+}
+
+// Ganho do motorista = valor gravado no pedido (fatia do frete).
+// Pedido novo traz driverEarningsCents; legado usa o driverEarnings pago;
+// sem os dois, cai no frete × share. null quando nem o frete existe.
+export function orderDriverEarnings(o, driverShare) {
+  if (typeof o.driverEarningsCents === "number") return o.driverEarningsCents / 100;
+  if (typeof o.driverEarnings === "number") return o.driverEarnings;
+  const frete = orderFreteReais(o);
+  return frete != null ? frete * driverShare : null;
+}
+
+// Margem NaMão sobre o frete = frete − motorista (spread do pool de entrega).
+export function orderDeliveryMargin(o, driverShare) {
+  const frete = orderFreteReais(o);
+  const drv = orderDriverEarnings(o, driverShare);
+  if (frete == null || drv == null) return null;
+  return Math.max(0, frete - drv);
+}
+
 export function formatDate(ts) {
   if (!ts) return "—";
   const d = new Date(typeof ts === "number" ? ts : ts.toMillis ? ts.toMillis() : Date.parse(ts));
