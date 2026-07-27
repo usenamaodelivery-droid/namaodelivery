@@ -6,7 +6,7 @@ import {
 import { db, APP_ID, DRIVER_SHARE } from "../firebase.js";
 import {
   formatBRL, formatDate, badge, DRIVER_STATUS, escapeHtml, showToast,
-  confirmDialog, debounce, downloadCsv,
+  confirmDialog, debounce, downloadCsv, orderDriverEarnings,
 } from "../util.js";
 
 let allDrivers = [];
@@ -33,7 +33,7 @@ async function loadDrivers() {
 }
 
 async function loadDriverEarnings(uid) {
-  // Soma 85% das entregas concluídas
+  // Soma a fatia do frete (gravada no pedido) das entregas concluídas
   const snap = await getDocs(query(
     collection(db, `artifacts/${APP_ID}/public/data/orders`),
     where("driverId", "==", uid),
@@ -45,7 +45,8 @@ async function loadDriverEarnings(uid) {
   let paid = 0;
   snap.forEach((d) => {
     const o = d.data();
-    const earn = (Number(o.price) || 0) * DRIVER_SHARE;
+    // Ganho = fatia do FRETE gravada no pedido (fonte única), nunca do total.
+    const earn = orderDriverEarnings(o, DRIVER_SHARE) || 0;
     total += earn;
     count++;
     if (o.payoutStatus === "completed") paid += earn;
@@ -138,7 +139,7 @@ async function openDetail(uid) {
       </div>
 
       <div class="bg-slate-50 rounded-xl p-4 mb-5">
-        <p class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Ganhos (85% das entregas)</p>
+        <p class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Ganhos (fatia do frete)</p>
         <div class="grid grid-cols-3 gap-3 text-sm">
           <div><p class="text-tiny text-slate-500">Total</p><p class="font-black text-lg">${formatBRL(earn.total)}</p></div>
           <div><p class="text-tiny text-slate-500">Disponível</p><p class="font-black text-lg text-accent">${formatBRL(earn.available)}</p></div>

@@ -2,10 +2,11 @@
 import {
   collection, query, where, orderBy, limit, getDocs, doc, getDoc, updateDoc,
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { db, APP_ID, DRIVER_SHARE, PLATFORM_FEE } from "../firebase.js";
+import { db, APP_ID, DRIVER_SHARE } from "../firebase.js";
 import {
   formatBRL, formatDate, badge, ORDER_STATUS, escapeHtml, showToast,
   confirmDialog, debounce, downloadCsv,
+  orderFreteReais, orderDriverEarnings, orderDeliveryMargin,
 } from "../util.js";
 
 const ORDERS_PATH = `artifacts/${APP_ID}/public/data/orders`;
@@ -62,8 +63,17 @@ async function openDetail(orderId) {
   const messages = [];
   if (chatSnap) chatSnap.forEach((d) => messages.push({ id: d.id, ...d.data() }));
 
-  const driverEarn = (Number(o.price) || 0) * DRIVER_SHARE;
-  const platform = (Number(o.price) || 0) * PLATFORM_FEE;
+  // Split motorista/plataforma incide SÓ sobre o frete (fonte única em util.js),
+  // nunca sobre o total. A comissão da loja é sobre o PRODUTO, à parte.
+  const freteReais = orderFreteReais(o);
+  const driverEarn = orderDriverEarnings(o, DRIVER_SHARE);
+  const platform = orderDeliveryMargin(o, DRIVER_SHARE);
+
+  // Comissão da loja incide sobre os PRODUTOS:
+  // loja com plano ativo no NaMão social = 0%; loja só no delivery = 15%.
+  const storeCommission = typeof o.commissionCents === "number" ? o.commissionCents / 100 : null;
+  const commissionPct = typeof o.commissionRate === "number" ? Math.round(o.commissionRate * 100) : null;
+  const driverPct = Math.round(DRIVER_SHARE * 100);
 
   const html = `
     <div class="p-5">
@@ -86,10 +96,16 @@ async function openDetail(orderId) {
         <div><p class="text-tiny text-slate-500 uppercase font-bold">Concluído</p><p class="text-xs">${formatDate(o.completedAt || o.deliveredAt)}</p></div>
       </div>
 
-      <div class="bg-slate-50 rounded-xl p-3 mb-4 grid grid-cols-3 gap-2 text-center">
-        <div><p class="text-tiny text-slate-500">Motorista (85% frete)</p><p class="font-black">${formatBRL(driverEarn)}</p></div>
-        <div><p class="text-tiny text-slate-500">Margem NaMão (15% frete)</p><p class="font-black text-accent">${formatBRL(platform)}</p></div>
-        <div><p class="text-tiny text-slate-500">Status PIX</p><p class="font-bold text-xs">${escapeHtml(o.paymentStatus || "—")}</p></div>
+      <div class="bg-slate-50 rounded-xl p-3 mb-4 space-y-3">
+        <div class="grid grid-cols-3 gap-2 text-center">
+          <div><p class="text-tiny text-slate-500">Frete</p><p class="font-black">${freteReais != null ? formatBRL(freteReais) : "—"}</p></div>
+          <div><p class="text-tiny text-slate-500">Motorista (${driverPct}% do frete)</p><p class="font-black">${driverEarn != null ? formatBRL(driverEarn) : "—"}</p></div>
+          <div><p class="text-tiny text-slate-500">Margem NaMão (frete)</p><p class="font-black text-accent">${platform != null ? formatBRL(platform) : "—"}</p></div>
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-center border-t border-slate-200 pt-3">
+          <div><p class="text-tiny text-slate-500">Comissão loja${commissionPct != null ? ` (${commissionPct}% do produto)` : " (produto)"}</p><p class="font-black">${storeCommission != null ? formatBRL(storeCommission) : "—"}</p></div>
+          <div><p class="text-tiny text-slate-500">Status PIX</p><p class="font-bold text-xs">${escapeHtml(o.paymentStatus || "—")}</p></div>
+        </div>
       </div>
 
       ${o.items && Array.isArray(o.items) && o.items.length ? `

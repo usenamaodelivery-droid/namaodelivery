@@ -2,8 +2,11 @@
 import {
   collection, query, where, orderBy, getDocs, limit,
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { db, APP_ID, PLATFORM_FEE, DRIVER_SHARE } from "../firebase.js";
-import { formatBRL, formatDate, escapeHtml, downloadCsv } from "../util.js";
+import { db, APP_ID, DRIVER_SHARE } from "../firebase.js";
+import {
+  formatBRL, formatDate, escapeHtml, downloadCsv,
+  orderFreteReais, orderDriverEarnings, orderDeliveryMargin,
+} from "../util.js";
 
 const ORDERS_PATH = `artifacts/${APP_ID}/public/data/orders`;
 const PAYOUTS_PATH = `artifacts/${APP_ID}/payouts`;
@@ -38,7 +41,9 @@ async function loadFinance(days) {
 }
 
 function dayBucket(orders, days) {
-  const buckets = new Array(days).fill(0);
+  const values = new Array(days).fill(0);   // receita bruta (total)
+  const driver = new Array(days).fill(0);   // repasse motorista (frete)
+  const margin = new Array(days).fill(0);   // margem NaMão (frete)
   const labels = [];
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -51,9 +56,13 @@ function dayBucket(orders, days) {
     if (!ts) return;
     const diff = Math.floor((today.getTime() - new Date(new Date(ts).setHours(0, 0, 0, 0)).getTime()) / DAY_MS);
     const idx = days - 1 - diff;
-    if (idx >= 0 && idx < days) buckets[idx] += Number(o.price || 0);
+    if (idx >= 0 && idx < days) {
+      values[idx] += Number(o.price || 0);
+      driver[idx] += orderDriverEarnings(o, DRIVER_SHARE) || 0;
+      margin[idx] += orderDeliveryMargin(o, DRIVER_SHARE) || 0;
+    }
   });
-  return { labels, values: buckets };
+  return { labels, values, driver, margin };
 }
 
 function svgChart(labels, values) {
@@ -96,15 +105,18 @@ export async function renderFinance({ content, actionsRoot }) {
     return;
   }
 
+  // Receita bruta = GMV (produtos + frete). Repasse e margem incidem SÓ sobre
+  // o frete (fonte única em util.js), nunca sobre o total.
   const totalRevenue = data.orders.reduce((s, o) => s + Number(o.price || 0), 0);
-  const driverPayouts = totalRevenue * DRIVER_SHARE;
-  const platformCut = totalRevenue * PLATFORM_FEE;
+  const driverPayouts = data.orders.reduce((s, o) => s + (orderDriverEarnings(o, DRIVER_SHARE) || 0), 0);
+  const platformCut = data.orders.reduce((s, o) => s + (orderDeliveryMargin(o, DRIVER_SHARE) || 0), 0);
   const totalPaidOut = data.payouts
     .filter((p) => p.status === "completed" || p.status === "processing")
     .reduce((s, p) => s + Number(p.amount || 0), 0);
-  const platformBalance = totalRevenue - totalPaidOut;
+  const platformBalance = driverPayouts - totalPaidOut;
+  const driverPct = Math.round(DRIVER_SHARE * 100);
 
-  const { labels, values } = dayBucket(data.orders, days);
+  const { labels, values, driver, margin } = dayBucket(data.orders, days);
 
   actionsRoot.innerHTML = `
     <select id="finance-period" class="px-3 py-2 text-sm font-bold rounded-lg border border-slate-200 bg-white">
@@ -117,8 +129,8 @@ export async function renderFinance({ content, actionsRoot }) {
     </button>
   `;
   document.getElementById("csv-finance").addEventListener("click", () => {
-    const rows = [["Data", "Receita Bruta", "Comissão (15%)", "Repasse Motoristas (85%)"]];
-    labels.forEach((l, i) => rows.push([l, values[i].toFixed(2), (values[i] * PLATFORM_FEE).toFixed(2), (values[i] * DRIVER_SHARE).toFixed(2)]));
+    const rows = [["Data", "Receita Bruta (GMV)", "Margem NaMão (frete)", `Repasse Motoristas (${driverPct}% frete)`]];
+    labels.forEach((l, i) => rows.push([l, values[i].toFixed(2), margin[i].toFixed(2), driver[i].toFixed(2)]));
     downloadCsv(`financeiro-${days}d-${Date.now()}.csv`, rows);
   });
   document.getElementById("finance-period").addEventListener("change", async (e) => {
@@ -134,14 +146,14 @@ export async function renderFinance({ content, actionsRoot }) {
         <p class="text-xs text-slate-500 mt-1">${data.orders.length} entregas</p>
       </div>
       <div class="bg-white p-5 rounded-2xl shadow-card">
-        <p class="text-xs font-extrabold uppercase text-slate-500 mb-2">Comissão Plataforma</p>
+        <p class="text-xs font-extrabold uppercase text-slate-500 mb-2">Margem NaMão (frete)</p>
         <p class="text-3xl font-black">${formatBRL(platformCut)}</p>
-        <p class="text-xs text-slate-500 mt-1">15% (lucro bruto)</p>
+        <p class="text-xs text-slate-500 mt-1">spread sobre o frete · não cobrado do lojista</p>
       </div>
       <div class="bg-white p-5 rounded-2xl shadow-card">
         <p class="text-xs font-extrabold uppercase text-slate-500 mb-2">Repasse Motoristas</p>
         <p class="text-3xl font-black">${formatBRL(driverPayouts)}</p>
-        <p class="text-xs text-slate-500 mt-1">85% (devido)</p>
+        <p class="text-xs text-slate-500 mt-1">${driverPct}% do frete (devido)</p>
       </div>
       <div class="bg-white p-5 rounded-2xl shadow-card">
         <p class="text-xs font-extrabold uppercase text-slate-500 mb-2">Já pago via PIX</p>
@@ -156,9 +168,9 @@ export async function renderFinance({ content, actionsRoot }) {
     </div>
 
     <div class="bg-white rounded-2xl shadow-card p-5">
-      <p class="text-sm font-extrabold uppercase text-slate-500 mb-3">Saldo plataforma (após repasses já feitos)</p>
-      <p class="text-4xl font-black ${platformBalance >= 0 ? "text-accent" : "text-danger"}">${formatBRL(platformBalance)}</p>
-      <p class="text-xs text-slate-500 mt-1">Receita bruta - repasses já enviados via MP</p>
+      <p class="text-sm font-extrabold uppercase text-slate-500 mb-3">Repasses pendentes</p>
+      <p class="text-4xl font-black ${platformBalance <= 0 ? "text-accent" : "text-warn"}">${formatBRL(platformBalance)}</p>
+      <p class="text-xs text-slate-500 mt-1">Devido aos motoristas (frete) − já enviado via PIX</p>
     </div>
   `;
 }

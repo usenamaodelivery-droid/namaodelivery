@@ -106,6 +106,8 @@ async function loadMerchantOrderStats(merchantId) {
   // também inclui `merchantName` pra display, então fazemos dois sweeps.
   let total = 0;
   let count = 0;
+  let products = 0;   // subtotal dos produtos (base da comissão da loja)
+  let commission = 0; // comissão da loja gravada no pedido (commissionCents)
   try {
     const snap = await getDocs(query(
       collection(db, ORDERS_PATH),
@@ -115,6 +117,13 @@ async function loadMerchantOrderStats(merchantId) {
       const o = d.data();
       if (o.status === "completed") {
         total += Number(o.price || 0);
+        // Subtotal de produtos: base correta da comissão (NÃO inclui frete/taxa).
+        const prod = typeof o.itemsTotalCents === "number" ? o.itemsTotalCents / 100 : Number(o.price || 0);
+        products += prod;
+        // Comissão da loja: usa o valor gravado (fonte única). Legado sem o
+        // campo cai no subtotal de produtos × taxa (0% se a loja é isenta).
+        if (typeof o.commissionCents === "number") commission += o.commissionCents / 100;
+        else commission += prod * MERCHANT_PRODUCT_COMMISSION;
         count++;
       }
     });
@@ -122,7 +131,7 @@ async function loadMerchantOrderStats(merchantId) {
     // Sem índice composto? cai silenciosamente, count fica 0.
     console.warn("orders by merchantId failed", e);
   }
-  return { total, count };
+  return { total, count, products, commission };
 }
 
 async function loadMerchantRecentOrders(merchantId, n = 10) {
@@ -149,9 +158,9 @@ function statusBadge(m) {
 }
 
 // Comissão sobre produtos (subtotal do cardápio): 15% para lojas Pedir-only,
-// 0% para lojas linkadas à NaMão social. PLATFORM_FEE (15%) é a margem sobre
-// frete e NUNCA debita o lojista — é o spread entre o que o cliente paga e os
-// 85% que vai pro motorista. Não confundir.
+// 0% para lojas linkadas à NaMão social (plano ativo). Não confundir com a
+// divisão do FRETE (PLATFORM_FEE 12% / DRIVER_SHARE 88%), que é o spread entre
+// o cliente e o motorista e NUNCA debita o lojista.
 const MERCHANT_PRODUCT_COMMISSION = 0.15;
 
 function commissionBadge(m) {
@@ -317,7 +326,7 @@ async function openDetail(merchantId) {
           <div><p class="text-tiny text-slate-500">Total</p><p class="font-black text-lg">${formatBRL(stats.total)}</p></div>
           <div><p class="text-tiny text-slate-500">Pedidos</p><p class="font-black text-lg">${stats.count}</p></div>
           <div><p class="text-tiny text-slate-500">${m.commissionFree ? "Comissão produtos" : `Comissão produtos (${(MERCHANT_PRODUCT_COMMISSION * 100).toFixed(0)}%)`}</p>
-               <p class="font-black text-lg">${m.commissionFree ? "Isento" : formatBRL(stats.total * MERCHANT_PRODUCT_COMMISSION)}</p></div>
+               <p class="font-black text-lg">${m.commissionFree ? "Isento" : formatBRL(stats.commission)}</p></div>
         </div>
       </div>
 
@@ -381,7 +390,7 @@ async function openDetail(merchantId) {
           : `<button data-act="activate"   class="flex-1 py-2.5 bg-accent text-white font-black rounded-xl hover:bg-accent-dark"><i class="fa-solid fa-power-off mr-2"></i>Ativar loja</button>`}
         ${m.commissionFree
           ? `<button data-act="charge"   class="flex-1 py-2.5 bg-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-300"><i class="fa-solid fa-percent mr-2"></i>Cobrar comissão</button>`
-          : `<button data-act="freecomm" class="flex-1 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700"><i class="fa-solid fa-crown mr-2"></i>Isentar (NaMão ATIVO)</button>`}
+          : `<button data-act="freecomm" class="flex-1 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700"><i class="fa-solid fa-crown mr-2"></i>Isentar comissão</button>`}
       </div>
     </div>
   `;
@@ -501,7 +510,7 @@ function rerender() {
       <span class="px-2 py-1 rounded-md bg-slate-100 text-slate-700"><b>${allMerchants.length}</b> total</span>
       <span class="px-2 py-1 rounded-md bg-green-100 text-green-800"><b>${active}</b> ativas</span>
       <span class="px-2 py-1 rounded-md bg-blue-100 text-blue-800"><b>${visible}</b> no catálogo</span>
-      <span class="px-2 py-1 rounded-md bg-amber-100 text-amber-800"><b>${free}</b> NaMão ATIVO</span>
+      <span class="px-2 py-1 rounded-md bg-amber-100 text-amber-800"><b>${free}</b> isentas (0%)</span>
       <span class="px-2 py-1 rounded-md bg-slate-100 text-slate-700"><b>${fromNamao}</b> via NaMão social</span>
     `;
   }
@@ -544,7 +553,7 @@ export async function renderMerchants({ content, actionsRoot }) {
           <select id="m-comm" class="px-3 py-2 text-sm font-bold rounded-lg border border-slate-200 bg-white">
             <option value="all">Comissão (todas)</option>
             <option value="paid">Pagam comissão</option>
-            <option value="free">NaMão ATIVO (isentas)</option>
+            <option value="free">Isentas de comissão (0%)</option>
           </select>
           <select id="m-src" class="px-3 py-2 text-sm font-bold rounded-lg border border-slate-200 bg-white">
             <option value="all">Origem (todas)</option>

@@ -10,11 +10,6 @@ const CONFIG_PATH = `artifacts/${APP_ID}/config/general`;
 
 const DEFAULTS = {
   platformFee: PLATFORM_FEE,
-  motoBase: 8.0,
-  motoPerKm: 1.9,
-  carBase: 15.0,
-  carPerKm: 3.8,
-  routeDetourFactor: 1.35,
   cities: ["Vitória", "Vila Velha"],
   supportWhatsapp: "5527988528835",
   registrationOpen: true,
@@ -65,17 +60,8 @@ export async function renderConfig({ content }) {
       <form id="cfg-form" class="space-y-5">
 
         <div class="bg-white rounded-2xl shadow-card p-5">
-          <p class="text-sm font-extrabold uppercase text-slate-500 mb-3">Comissão</p>
-          ${inputField("platformFee", "Taxa da plataforma (0..1)", cfg.platformFee, "number", "Ex: 0.15 = 15%. Motorista recebe (1 - taxa).")}
-        </div>
-
-        <div class="bg-white rounded-2xl shadow-card p-5">
-          <p class="text-sm font-extrabold uppercase text-slate-500 mb-3">Preços base</p>
-          ${inputField("motoBase",   "Base Moto (R$)",     cfg.motoBase,   "number")}
-          ${inputField("motoPerKm",  "Por Km Moto (R$)",   cfg.motoPerKm,  "number")}
-          ${inputField("carBase",    "Base Carro (R$)",    cfg.carBase,    "number")}
-          ${inputField("carPerKm",   "Por Km Carro (R$)",  cfg.carPerKm,   "number")}
-          ${inputField("routeDetourFactor", "Fator desvio rota", cfg.routeDetourFactor, "number", "Multiplicador da distância em linha reta.")}
+          <p class="text-sm font-extrabold uppercase text-slate-500 mb-3">Divisão do frete</p>
+          ${inputField("platformFee", "Fatia da plataforma sobre o frete (0..1)", cfg.platformFee, "number", "Ex: 0,12 = 12%. Motorista recebe (1 − taxa) do FRETE. Não é comissão da loja.")}
         </div>
 
         <div class="bg-white rounded-2xl shadow-card p-5">
@@ -103,9 +89,8 @@ export async function renderConfig({ content }) {
       <div class="bg-primary text-white rounded-2xl shadow-card p-5 self-start">
         <p class="text-sm font-extrabold uppercase text-slate-300 mb-3">Cuidado</p>
         <ul class="text-sm space-y-2 text-slate-200">
-          <li>• Mudar a <b class="text-accent">taxa da plataforma</b> afeta TODOS os pedidos novos.</li>
+          <li>• A <b class="text-accent">fatia da plataforma</b> é a divisão do FRETE (motorista × NaMão), não a comissão da loja.</li>
           <li>• Desligar <b class="text-accent">aceitar pedidos</b> impede clientes de fazer novos pedidos.</li>
-          <li>• Os <b class="text-accent">preços base</b> e fator de rota afetam o cálculo da PWA cliente.</li>
           <li>• Cadastro auto-aprova é <b class="text-warn">arriscado</b>: deixe desligado em produção.</li>
         </ul>
       </div>
@@ -116,11 +101,6 @@ export async function renderConfig({ content }) {
     e.preventDefault();
     const data = {
       platformFee:        Number(document.getElementById("platformFee").value),
-      motoBase:           Number(document.getElementById("motoBase").value),
-      motoPerKm:          Number(document.getElementById("motoPerKm").value),
-      carBase:            Number(document.getElementById("carBase").value),
-      carPerKm:           Number(document.getElementById("carPerKm").value),
-      routeDetourFactor:  Number(document.getElementById("routeDetourFactor").value),
       cities:             document.getElementById("cities").value.split(",").map((s) => s.trim()).filter(Boolean),
       supportWhatsapp:    document.getElementById("supportWhatsapp").value.trim(),
       ordersOpen:         document.getElementById("ordersOpen").checked,
