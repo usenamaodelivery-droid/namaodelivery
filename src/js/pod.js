@@ -221,7 +221,7 @@ export async function confirmDeliveryWithPOD(driverId) {
 
     await completeOrder({ orderId: currentOrderId, driverId, photoUrl, signatureUrl });
     closePOD();
-    showToast("Entrega finalizada! Ganhos de 85% creditados.");
+    showToast("Entrega finalizada! Ganhos de 88% creditados.");
   } catch (err) {
     console.error(err);
     showToast(err.message || "Falha ao enviar prova");

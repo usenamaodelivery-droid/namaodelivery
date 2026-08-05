@@ -1,48 +1,20 @@
 import {
   collection,
   onSnapshot,
-  addDoc,
   updateDoc,
   doc,
   runTransaction,
   query,
   where,
-  orderBy,
-  serverTimestamp
+  orderBy
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { db } from "./firebaseInit.js";
 import {
   APP_ID,
-  DRIVER_SHARE,
-  PLATFORM_FEE,
-  MOTO_BASE,
-  MOTO_PER_KM,
-  CAR_BASE,
-  CAR_PER_KM
+  DRIVER_SHARE
 } from "./firebaseConfig.js";
 
 const ordersCol = () => collection(db, "artifacts", APP_ID, "public", "data", "orders");
-
-/** Cliente cria pedido — entra em waiting_confirmation (aguardando admin liberar PIX). */
-export async function createOrder({ vehicle, price, origin, destination, customerId, originCoords, destCoords, itemType }) {
-  return addDoc(ordersCol(), {
-    veh: vehicle,
-    itemType: itemType || "Comida",
-    price,
-    origin,
-    destination,
-    originCoords,
-    destCoords,
-    status: "waiting_confirmation",
-    customerId,
-    driverId: null,
-    driverName: null,
-    driverLat: null,
-    driverLng: null,
-    createdAt: Date.now(),
-    createdAtServer: serverTimestamp()
-  });
-}
 
 /** Admin confirma PIX — pedido passa a ser visível aos motoristas. */
 export async function adminConfirmPix(orderId) {
@@ -110,8 +82,22 @@ export async function completeOrder({ orderId, driverId, photoUrl, signatureUrl 
     if (order.status === "completed") throw new Error("Pedido já foi finalizado");
     if (order.driverId !== driverId) throw new Error("Apenas o motorista responsável pode finalizar");
 
-    const driverEarnings = round2(order.price * DRIVER_SHARE);
-    const platformFee = round2(order.price * PLATFORM_FEE);
+    // Fonte única: o repasse (fatia do FRETE) é gravado na criação do pedido
+    // pelo Pedir NaMão. Aqui o app só credita esse valor; nunca recalcula sobre
+    // o total. Fallback só para pedidos legados sem o campo novo.
+    const freteCents = typeof order.deliveryPriceCents === "number" ? order.deliveryPriceCents : null;
+    let driverEarnings;
+    if (typeof order.driverEarningsCents === "number") {
+      driverEarnings = round2(order.driverEarningsCents / 100);
+    } else if (freteCents != null) {
+      console.warn(`[completeOrder] pedido ${orderId} sem driverEarningsCents; usando frete×${DRIVER_SHARE} (legado)`);
+      driverEarnings = round2((freteCents / 100) * DRIVER_SHARE);
+    } else {
+      console.warn(`[completeOrder] pedido ${orderId} sem frete; usando price×${DRIVER_SHARE} (legado)`);
+      driverEarnings = round2(Number(order.price || 0) * DRIVER_SHARE);
+    }
+    const freteReais = freteCents != null ? freteCents / 100 : Number(order.price || 0);
+    const platformFee = round2(Math.max(0, freteReais - driverEarnings));
 
     const currentBalance = walletSnap.exists() ? Number(walletSnap.data().balance || 0) : 0;
     const newBalance = round2(currentBalance + driverEarnings);
@@ -141,12 +127,6 @@ export function subscribeOrders(cb) {
     list.sort((a, b) => b.createdAt - a.createdAt);
     cb(list);
   });
-}
-
-/** Calcula preço sugerido baseado em distância (km) e veículo. */
-export function calculatePrice(distanceKm, vehicle) {
-  if (vehicle === "Moto") return round2(MOTO_BASE + distanceKm * MOTO_PER_KM);
-  return round2(CAR_BASE + distanceKm * CAR_PER_KM);
 }
 
 function round2(n) {

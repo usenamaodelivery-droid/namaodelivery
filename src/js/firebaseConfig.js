@@ -17,12 +17,8 @@ export const firebaseConfig = {
 export const APP_ID = "namao-delivery-prod";
 
 // Parâmetros de negócio
-export const PLATFORM_FEE = 0.15;      // 15% plataforma
-export const DRIVER_SHARE = 0.85;      // 85% motorista
-export const MOTO_BASE = 8.0;
-export const MOTO_PER_KM = 1.9;
-export const CAR_BASE = 15.0;
-export const CAR_PER_KM = 3.8;
+export const PLATFORM_FEE = 0.12;      // 12% plataforma
+export const DRIVER_SHARE = 0.88;      // 88% motorista
 export const ROUTE_DETOUR_FACTOR = 1.35;
 export const LOCATION_UPDATE_MS = 15_000;
 
