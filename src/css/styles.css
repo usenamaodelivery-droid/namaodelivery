@@ -45,10 +45,22 @@ input, select, textarea {
 .input-field:focus { border-color: #E8B93A; background: #fff; }
 
 /* ===== Bottom nav ===== */
+#bottom-nav {
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+}
 #bottom-nav button {
   min-height: 64px;
   transition: all 0.18s ease;
   position: relative;
+}
+/* Garante que o conteúdo rolável não fique escondido atrás da nav + barra do sistema */
+#view-atividade,
+#view-perfil,
+#view-driver-registration {
+  padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
+}
+#view-entregador {
+  padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
 }
 #bottom-nav button.active i {
   color: #1B304F;
